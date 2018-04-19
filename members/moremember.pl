@@ -336,4 +336,6 @@ if ( keys %$consent_types ) {
     );
 }
 
+C4::Log::logaction("MEMBERS", "VIEW", $borrowernumber, "Patron details") if C4::Context->preference("BorrowersViewLog");
+
 output_html_with_http_headers $input, $cookie, $template->output;

@@ -19,6 +19,12 @@ Logging:
                   0: "Don't log"
             - API key creation, deletion, revocation and activation actions.
         -
+            - pref: BorrowersViewLog
+              choices:
+                  1: Log
+                  0: "Don't log"
+            - when patron data is viewed.
+        -
             - pref: CardnumberLog
               choices:
                   1: Log

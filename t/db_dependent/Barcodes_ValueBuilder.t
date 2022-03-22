@@ -17,9 +17,10 @@
 use Modern::Perl;
 
 use Test::NoWarnings;
-use Test::More tests => 14;
+use Test::More tests => 17;
 use Test::Warn;
 use Test::MockModule;
+use t::lib::Mocks;
 use t::lib::TestBuilder;
 
 use Koha::Database;
@@ -85,5 +86,33 @@ $builder->build_sample_item( { barcode => '39999000019193' } );    # 14-digit
 $builder->build_sample_item( { barcode => '3999900001927' } );     # 13-digit EAN-13
 ( $nextnum, $scr ) = C4::Barcodes::ValueBuilder::EAN13::get_barcode( \%args );
 is( $nextnum, '3999900001934', 'EAN-13 picks max among 13-digit barcodes, ignores 14-digit' );
+
+$dbh->do(q|DELETE FROM items|);
+my $library_1 = $builder->build_object( { class => 'Koha::Libraries' } );
+
+my $prefix_yaml = 'Default: DEF
+' . $library_1->branchcode . ': TEST';
+t::lib::Mocks::mock_preference( 'BarcodePrefix', $prefix_yaml );
+
+my $item_6 = $builder->build_sample_item(
+    {
+        barcode    => 'TEST1207301414381',
+        homebranch => $library_1->branchcode
+    }
+);
+
+( $args{branchcode} ) = $library_1->branchcode;
+( $nextnum, $scr ) = C4::Barcodes::ValueBuilder::preyymmddts::get_barcode( \%args );
+
+# test if begining of new barcode matches prefix and date args
+like( $nextnum, qr/TEST120730/, 'preyymmddts barcode test branch specific prefix' );
+ok( length($scr) > 0, 'preyymmddtsr javascript' );
+
+$dbh->do(q|DELETE FROM items|);
+my $library_2 = $builder->build_object( { class => 'Koha::Libraries' } );
+
+( $args{branchcode} ) = $library_2->branchcode;
+( $nextnum, $scr ) = C4::Barcodes::ValueBuilder::preyymmddts::get_barcode( \%args );
+like( $nextnum, qr/DEF120730/, 'preyymmddts barcode test default prefix' );
 
 $schema->storage->txn_rollback;

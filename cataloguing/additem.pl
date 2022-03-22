@@ -26,7 +26,7 @@ use CGI qw ( -utf8 );
 use C4::Auth qw( get_template_and_user haspermission );
 use C4::Barcodes::ValueBuilder;
 use C4::Barcodes;
-use C4::Biblio      qw( GetFrameworkCode GetMarcFromKohaField GetMarcStructure IsMarcStructureInternal ModBiblio );
+use C4::Biblio qw( GetFrameworkCode GetMarcFromKohaField GetMarcStructure IsMarcStructureInternal ModBiblio );
 use C4::Circulation qw( barcodedecode LostItem );
 use C4::Context;
 use C4::Members;
@@ -43,14 +43,14 @@ use Koha::SearchEngine::Indexer;
 use Koha::UI::Form::Builder::Item;
 use Koha::Result::Boolean;
 
-use Encode          qw( encode_utf8 );
+use Encode qw( encode_utf8 );
 use List::MoreUtils qw( any uniq );
-use List::Util      qw( first min );
+use List::Util qw( first min );
 use MARC::File::XML;
 use MIME::Base64 qw( decode_base64url encode_base64url );
-use Storable     qw( freeze thaw );
-use URI::Escape  qw( uri_escape_utf8 );
-use Try::Tiny    qw( catch try );
+use Storable qw( freeze thaw );
+use URI::Escape qw( uri_escape_utf8 );
+use Try::Tiny qw( catch try );
 
 our $dbh = C4::Context->dbh;
 
@@ -426,8 +426,14 @@ if ( $op eq "cud-additem" ) {
                 if ($barcodevalue) {
 
                     # Getting a new barcode (if it is not the first iteration or the barcode we tried already exists)
-                    $barcodevalue = $barcodeobj->next_value($oldbarcode)
-                        if ( $i > 0 || $exist_itemnumber );
+                    if ( C4::Context->preference("autoBarcode") eq 'preyymmddts' ) {
+                        my $barcodeobj2 = C4::Barcodes->new('preyymmddts');
+                        $barcodevalue = $barcodeobj2->value()
+                            if ( $i > 0 || $exist_itemnumber );
+                    } else {
+                        $barcodevalue = $barcodeobj->next_value($oldbarcode)
+                            if ( $i > 0 || $exist_itemnumber );
+                    }
 
                     # Putting it into the record
                     if ($barcodevalue) {

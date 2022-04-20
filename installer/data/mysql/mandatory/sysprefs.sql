@@ -311,6 +311,7 @@ INSERT INTO systempreferences ( `variable`, `value` ) VALUES
 ('FinesIncludeGracePeriod','1'),
 ('FinesLog','1'),
 ('finesMode','off'),
+('FloatRules',''),
 ('ForceLibrarySelection','0'),
 ('ForcePasswordResetWhenSetByStaff','0'),
 ('FRBRizeEditions','0'),

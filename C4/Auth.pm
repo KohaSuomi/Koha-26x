@@ -66,6 +66,7 @@ use Koha::Auth::Permissions;
 use Koha::Token;
 use Koha::Exceptions::Token;
 use Koha::Session;
+use Data::Dumper;
 
 # use utf8;
 
@@ -834,6 +835,8 @@ sub _timeout_syspref {
         $timeout = $default_timeout;
     }
 
+    $timeout =  C4::KohaSuomi::AuthExtra::get_timeout(undef,$timeout);
+
     return $timeout;
 }
 
@@ -989,6 +992,22 @@ sub checkauth {
                 $auth_state = 'failed';
             } elsif ( !$logout ) {
 
+                #If SCO
+                Koha::Logger->get->debug(Dumper($session));
+                Koha::Logger->get->debug(Dumper($session->param( 'interface')));
+
+                if ( ($session->param( 'sco_user') == 1) ) {
+                    Koha::Logger->get->debug(   "Auth in OPAC" );
+                    $cookie = $cookie_mgr->replace_in_list( $cookie, $query->cookie(
+                        -expires    => '+12M',
+                        -name     => 'CGISESSID',
+                        -value    => $session->id,
+                        -HttpOnly => 1,
+                        -secure => ( C4::Context->https_enabled() ? 1 : 0 ),
+                        -sameSite => 'Lax',
+                    ));
+                }
+                else {
                 $cookie = $cookie_mgr->replace_in_list(
                     $cookie,
                     $query->cookie(
@@ -999,6 +1018,7 @@ sub checkauth {
                         -sameSite => 'Lax',
                     )
                 );
+                }
 
                 $flags = haspermission( $userid, $flagsrequired );
                 unless ($flags) {
@@ -1698,6 +1718,7 @@ sub check_api_auth {
 
         # new login
         my $userid   = $query->param('login_userid');
+        $timeout = C4::KohaSuomi::AuthExtra::get_timeout($userid,$timeout);
         my $password = $query->param('login_password');
         my ( $return, $cardnumber, $cas_ticket );
 
@@ -1894,6 +1915,9 @@ sub check_cookie_auth {
         my $ip       = $session->param('ip');
         my $lasttime = $session->param('lasttime');
         my $timeout  = _timeout_syspref();
+
+        ###########KD-4564
+        $timeout = C4::KohaSuomi::AuthExtra::get_timeout($userid,$timeout);
 
         if ( !$lasttime || ( $lasttime < time() - $timeout ) ) {
 

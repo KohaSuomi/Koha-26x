@@ -799,9 +799,19 @@
                     fixedHeader: false,
                 }, typeof table_settings !== 'undefined' && !empty_table_settings ? table_settings : null, 1, additional_filters, filters_options, external_filter_nodes, parent_block.find(".search_description"), additional_search_descriptions );
 
-                patron_search_form.on('submit', filter);
-                patron_search_form.on('submit', update_search_type);
-                patron_search_form.on('submit', function(){
+                patron_search_form.on('submit', function(e){
+                    e.preventDefault();
+                    update_search_type();
+                    var msg = _("Please fill out this field.");
+                    $("#empty-search-error").remove();
+                    let patron_search_filter = patron_search_form.find(".search_patron_filter");
+                    var searchfield = $.trim(patron_search_filter.val());
+                    patron_search_filter.val(searchfield);
+                    if ( searchfield != '' ) {
+                        filter();
+                    } else {
+                        patron_search_filter.focus().after('<span style="padding:5px;" id="empty-search-error" class="error">' + msg + '</span>');
+                    }
                     parent_block.find(".searchheader").show();
                     // Disable the search button until results are returned and displayed
                     patron_search_form.find(".search_patron_filter_btn").prop({disabled: true});

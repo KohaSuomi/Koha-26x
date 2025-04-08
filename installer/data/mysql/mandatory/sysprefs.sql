@@ -147,6 +147,7 @@ INSERT INTO systempreferences ( `variable`, `value` ) VALUES
 ('CalculateFundValuesIncludingTax', '1'),
 ('CalendarFirstDayOfWeek','0'),
 ('CancelOrdersInClosedBaskets', '0'),
+('CancelTransitWhenItemFloats','0'),
 ('CanMarkHoldsToPullAsLost','do_not_allow'),
 ('canreservefromotherbranches','1'),
 ('CardnumberLength', ''),

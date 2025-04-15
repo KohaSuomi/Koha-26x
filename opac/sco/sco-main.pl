@@ -32,11 +32,12 @@ use Modern::Perl;
 
 use CGI qw ( -utf8 );
 
-use C4::Auth        qw( in_iprange get_template_and_user checkpw );
+use C4::Auth qw( in_iprange get_template_and_user checkpw );
 use C4::Circulation qw( barcodedecode AddReturn CanBookBeIssued AddIssue CanBookBeRenewed AddRenewal );
-use C4::Reserves;
+use C4::Reserves qw ( ModReserveAffect );
 use C4::Output qw( output_html_with_http_headers );
 use C4::Members;
+use C4::Items qw( ModItemTransfer );
 use Koha::DateUtils qw( dt_from_string );
 use Koha::Acquisition::Currencies;
 use Koha::Items;
@@ -81,15 +82,21 @@ if ( defined C4::Context->preference('SCOAllowCheckin') ) {
 }
 
 my $issuerid = $loggedinuser;
-my ( $op, $patronlogin, $patronpw, $barcodestr, $confirmed, $newissues, $load_checkouts ) = (
-    $query->param("op")             || '',
-    $query->param("patronlogin")    || '',
-    $query->param("patronpw")       || '',
-    $query->param("barcode")        || '',
-    $query->param("confirmed")      || '',
-    $query->param("newissues")      || '',
-    $query->param("load_checkouts") || '',
-);
+my (
+    $op, $patronlogin, $patronpw, $barcodestr, $confirmed, $newissues, $load_checkouts, $load_holds,
+    $sco_entry_barcode
+    )
+    = (
+    $query->param("op")                || '',
+    $query->param("patronlogin")       || '',
+    $query->param("patronpw")          || '',
+    $query->param("barcode")           || '',
+    $query->param("confirmed")         || '',
+    $query->param("newissues")         || '',
+    $query->param("load_checkouts")    || '',
+    $query->param("load_holds")        || '',
+    $query->param("sco_entry_barcode") || '',
+    );
 
 my $jwt = $query->cookie('JWT');
 
@@ -101,8 +108,8 @@ if ( $op eq "logout" ) {
 }
 
 my $barcodes = [];
-if ($barcodestr) {
-    push @$barcodes, split( /\s\n/, $barcodestr );
+if ( $barcodestr || $sco_entry_barcode ) {
+    push @$barcodes, split( /\s\n/, $barcodestr ? $barcodestr : $sco_entry_barcode );
     $barcodes = [ map { $_ =~ /^\s*$/ ? () : barcodedecode($_) } @$barcodes ];
 }
 
@@ -149,11 +156,23 @@ if ($patron) {
     }
 }
 
-if ( $patron && $op eq "cud-returnbook" && $allowselfcheckreturns ) {
+if ( ( $op eq "cud-sco_entry_checkin" ) || ( $patron && $op eq "cud-returnbook" && $allowselfcheckreturns ) ) {
     my $success = 1;
+
+    if ( !@$barcodes ) {
+        $template->param( empty_return => 1 );
+    }
 
     foreach my $barcode (@$barcodes) {
         my $item = Koha::Items->find( { barcode => $barcode } );
+
+        my $title          = $item ? Koha::Biblios->find( { biblionumber => $item->biblionumber } )->title : undef;
+        my $checkinlibrary = $issuer && $branch ? Koha::Libraries->find($branch)->branchname               : undef;
+
+        if ( !$item ) {
+            $success = 0;
+        }
+
         if ( $success && C4::Context->preference("CircConfirmItemParts") ) {
             if ( defined($item)
                 && $item->materials )
@@ -162,7 +181,7 @@ if ( $patron && $op eq "cud-returnbook" && $allowselfcheckreturns ) {
             }
         }
 
-        if ($success) {
+        if ( $success && ( $op ne "cud-sco_entry_checkin" ) ) {
 
             # Patron cannot checkin an item they don't own
             $success = 0
@@ -170,15 +189,47 @@ if ( $patron && $op eq "cud-returnbook" && $allowselfcheckreturns ) {
         }
 
         if ($success) {
-            ($success) = AddReturn( $barcode, $branch );
+
+            my $to_branch = $item->homebranch;
+            my $messages;
+
+            ( $success, $messages ) = AddReturn( $barcode, $branch );
+
+            if ( $messages->{'ResFound'} ) {
+                my $reserve          = $messages->{'ResFound'};
+                my $reserve_id       = $reserve->{'reserve_id'};
+                my $resborrower      = $reserve->{'borrowernumber'};
+                my $resbranch        = $reserve->{'branchcode'};
+                my $itemnumber       = $item->itemnumber;
+                my $diff_branch_send = ( $branch ne $resbranch ) ? $resbranch : undef;
+
+                if ($diff_branch_send) {
+                    ModReserveAffect( $itemnumber, $resborrower, $diff_branch_send, $reserve_id );
+                    ModItemTransfer( $itemnumber, $branch, $resbranch, 'ResFound' );
+                } else {
+                    my $set_transit = C4::Context->preference('RequireSCCheckInBeforeNotifyingPickups');
+                    ModReserveAffect( $itemnumber, $resborrower, $set_transit, $reserve_id );
+                }
+            } elsif ( $messages->{'NeedsTransfer'} ) {
+                ModItemTransfer( $item->itemnumber, $branch, $to_branch, 'NeedsTransfer' );
+            }
+
+            if ( $messages->{'WrongTransfer'} ) {
+                my $item         = Koha::Items->find( $messages->{'WrongTransferItem'} );
+                my $old_transfer = $item->get_transfer;
+                my $new_transfer = $item->request_transfer(
+                    { to => $old_transfer->tobranch, reason => $old_transfer->reason, replace => 'WrongTransfer' } );
+            }
+
         }
 
         $template->param(
             returned => $success,
-            barcode  => $barcode
+            barcode  => $barcode,
+            title    => $title,
+            library  => $checkinlibrary
         );
     }    # foreach barcode in barcodes
-
 } elsif ( $patron && ( $op eq 'cud-checkout' ) ) {
     my @failed_checkouts;
     my @confirm_checkouts;

@@ -118,8 +118,11 @@ my $issuenoconfirm = 1;                                           #don't need to
 my $issuer         = Koha::Patrons->find($issuerid)->unblessed;
 
 my $patronid = $jwt ? Koha::Token->new->decode_jwt( { token => $jwt } ) : undef;
+
+# Prevent SCO page from loging page refreshes
+my $login_op = $query->param("login_op") || '';
 unless ($patronid) {
-    if ( C4::Context->preference('SelfCheckoutByLogin') ) {
+    if ( C4::Context->preference('SelfCheckoutByLogin') && $login_op eq "cud-login" ) {
         ( undef, $patronid ) = checkpw( $patronlogin, $patronpw );
     } else {    # People should not do that unless they know what they are doing!
                 # SelfCheckAllowByIPRanges MUST be configured

@@ -208,7 +208,7 @@ if ( ( $op eq "cud-sco_entry_checkin" ) || ( $patron && $op eq "cud-returnbook" 
 
                 if ($diff_branch_send) {
                     ModReserveAffect( $itemnumber, $resborrower, $diff_branch_send, $reserve_id );
-                    ModItemTransfer( $itemnumber, $branch, $resbranch, 'ResFound' );
+                    ModItemTransfer( $itemnumber, $branch, $resbranch, 'Reserve' );
                 } else {
                     my $set_transit = C4::Context->preference('RequireSCCheckInBeforeNotifyingPickups');
                     ModReserveAffect( $itemnumber, $resborrower, $set_transit, $reserve_id );
@@ -220,8 +220,9 @@ if ( ( $op eq "cud-sco_entry_checkin" ) || ( $patron && $op eq "cud-returnbook" 
             if ( $messages->{'WrongTransfer'} ) {
                 my $item         = Koha::Items->find( $messages->{'WrongTransferItem'} );
                 my $old_transfer = $item->get_transfer;
+                my $to_library   = Koha::Libraries->find( $old_transfer->tobranch );
                 my $new_transfer = $item->request_transfer(
-                    { to => $old_transfer->tobranch, reason => $old_transfer->reason, replace => 'WrongTransfer' } );
+                    { to => $to_library, reason => $old_transfer->reason, replace => 'WrongTransfer' } );
             }
 
         }

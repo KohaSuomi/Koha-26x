@@ -128,7 +128,7 @@
 
                 [% IF CAN_user_editcatalogue_edit_catalogue || ( CAN_user_editcatalogue_fast_cataloging && is_fast_add ) %]
                     [% IF ( count ) %]
-                        [% IF CAN_user_editcatalogue_delete_any_record %]
+                        [% IF CAN_user_editcatalogue_delete_bibliographic_records %]
                             <li
                                 data-bs-toggle="tooltip"
                                 data-bs-placement="left"
@@ -138,7 +138,7 @@
                             </li>
                         [% END %]
                     [% ELSIF ( biblio.subscriptions.count ) %]
-                        [% IF CAN_user_editcatalogue_delete_any_record %]
+                        [% IF CAN_user_editcatalogue_delete_bibliographic_records %]
                             [%- SET subscriptions_count = biblio.subscriptions.count -%]
                             <li
                                 data-bs-toggle="tooltip"
@@ -149,7 +149,7 @@
                             </li>
                         [% END %]
                     [% ELSE %]
-                        [% IF CAN_user_editcatalogue_delete_any_record %]
+                        [% IF CAN_user_editcatalogue_delete_bibliographic_records %]
                             <li>
                                 <form action="/cgi-bin/koha/cataloguing/addbiblio.pl" method="post">
                                     [% INCLUDE 'csrf-token.inc' %]

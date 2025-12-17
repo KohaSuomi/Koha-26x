@@ -20,9 +20,10 @@
 # along with Koha; if not, see <https://www.gnu.org/licenses>.
 
 use Modern::Perl;
-use CGI        qw ( -utf8 );
-use C4::Output qw( output_html_with_http_headers );
-use C4::Auth   qw( get_template_and_user );
+use CGI          qw ( -utf8 );
+use Scalar::Util qw( reftype );
+use C4::Output   qw( output_html_with_http_headers );
+use C4::Auth     qw( get_all_subpermissions get_template_and_user );
 use C4::Koha;
 use C4::Tags qw( get_count_by_tag_status );
 use Koha::AdditionalContents;
@@ -78,6 +79,18 @@ my $branch =
     && !$flags->{'superlibrarian'}
     ? C4::Context->userenv()->{'branch'}
     : undef;
+
+# Do not let patrons with only delete_bibliographic_records permission to access Catalogue modal
+my $editcatalogue_flags = $flags->{'editcatalogue'};
+if (   reftype($editcatalogue_flags)
+    && reftype($editcatalogue_flags) eq "HASH"
+    && scalar( keys %$editcatalogue_flags ) == 1
+    && $editcatalogue_flags->{'delete_bibliographic_records'} )
+{
+    $template->param(
+        only_delete_bibliographic_records_permission => 1,
+    );
+}
 
 my $pendingcomments = Koha::Reviews->search_limited( { approved => 0 } )->count;
 my $pendingtags     = get_count_by_tag_status(0);

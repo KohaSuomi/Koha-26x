@@ -81,6 +81,20 @@ function update_category_code(category_code) {
         .show();
     $(mytables).find(" li[data-category_code='']").show();
 
+    // Add class ignore_validation from hidden required fields to ignore validation
+    $("input,textarea,select")
+        .filter("[required]:hidden")
+        .each(function () {
+            $(this).addClass("ignore_validation");
+        });
+
+    // Remove class ignore_validation from visible required fields so they are validated
+    $("input,textarea,select")
+        .filter("[required]:visible")
+        .each(function () {
+            $(this).removeClass("ignore_validation");
+        });
+
     //Change password length hint
     var hint = $("#password").siblings(".hint").first();
     var min_length = $("select" + category_selector + " option:selected").data(
@@ -322,6 +336,7 @@ $(document).ready(function () {
     );
 
     $("#entryform").validate({
+        ignore: "#dateofbirth, .ignore_validation",
         rules: {
             email: {
                 email: true,
@@ -350,6 +365,30 @@ $(document).ready(function () {
             if (form.beenSubmitted) return false;
             else form.beenSubmitted = true;
             form.submit();
+        },
+        invalidHandler: function (form, validator) {
+            var error_msg = jQuery.validator.messages.missing_fields;
+            // First remove error messages so that it doesn't
+            // show in fieldset without errors
+            $("fieldset").each(function () {
+                $("#" + $(this).attr("id") + "-error").remove();
+            });
+            $(validator.errorList).each(function () {
+                var fieldset = $(this.element).parents('[id*="memberentry_"]');
+                var fieldset_id = fieldset.attr("id");
+                //Add error message only if it doesn't already exist
+                if (!$("#" + fieldset_id + "-error").length) {
+                    fieldset
+                        .find("legend")
+                        .before(
+                            '<span id="' +
+                                fieldset_id +
+                                '-error" class="required">' +
+                                error_msg +
+                                "</span>"
+                        );
+                }
+            });
         },
     });
 

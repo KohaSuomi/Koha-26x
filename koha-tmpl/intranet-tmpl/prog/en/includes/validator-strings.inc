@@ -11,6 +11,7 @@
             date: _("Please enter a valid date."),
             dateISO: _("Please enter a valid date (ISO)."),
             number: _("Please enter a valid number."),
+            missing_fields: _("There are some required fields missing from this section. Please complete them."),
             digits: _("Please enter only digits."),
             equalTo: _("Please enter the same value again."),
             number: _("Please add amount in valid format: 0.00"),

@@ -233,23 +233,23 @@ return {
             say_success( $out, "Added new table 'sip_system_preference_overrides'" );
         }
 
-        my $koha_instance = $ENV{KOHA_CONF} =~ m!^.+/sites/([^/]+)/koha-conf\.xml$! ? $1 : undef;
-        unless ($koha_instance) {
-            say_warning(
-                $out,
-                "No Koha instance found. Ensure \$KOHA_CONF is set and contains a valid Koha instance koha-conf.xml"
-            );
-            return;
-        }
+	# my $koha_instance = $ENV{KOHA_CONF} =~ m!^.+/sites/([^/]+)/koha-conf\.xml$! ? $1 : undef;
+	#unless ($koha_instance) {
+	#    say_warning(
+	#        $out,
+	#        "No Koha instance found. Ensure \$KOHA_CONF is set and contains a valid Koha instance koha-conf.xml"
+	#    );
+	#    return;
+	#}
 
-        my $SIPconfigFile = "/etc/koha/sites/$koha_instance/SIPconfig.xml";
+        my $SIPconfigFile = "/etc/koha/sipconfig.xml";
 
         unless ( -f $SIPconfigFile && -r $SIPconfigFile ) {
             say_warning( $out, "Skipping migration. SIP config file not found or unreadable" );
             return;
         }
 
-        say_info( $out, "Reading SIPconfig.xml for $koha_instance located at $SIPconfigFile" );
+        say_info( $out, "Reading SIPconfig.xml located at $SIPconfigFile" );
         my $SIPconfig = C4::SIP::Sip::Configuration->new($SIPconfigFile);
 
         # Institutions #

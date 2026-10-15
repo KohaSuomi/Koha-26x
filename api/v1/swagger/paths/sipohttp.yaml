@@ -11,7 +11,8 @@
       Requires:
       - SIPoHTTPEnabled system preference to be enabled
       - Valid SIP account credentials in request
-      - SIP account configured with SIPoHTTP endpoint (host/port)
+      - SIP account associated with a SIP institution
+      - SIP listener configured in sipconfig.xml for the account's institution
       
       Request XML format:
       ```xml
@@ -59,13 +60,15 @@
                 <response>98YYYYYN025005202609231301592.00AOKOHA|BXYYYYYYYYYYYNYYYY|</response>
             </ns1:sip>
       400:
-        description: Bad request (invalid XML, missing attributes/elements)
+        description: Bad request
         schema:
           type: object
           properties:
             error:
               type: string
-              example: "Invalid XML: Missing login attribute"
+              enum:
+                - "Invalid XML: Missing login attribute"
+                - "SIP account does not have an associated institution"
       401:
         description: Authentication failed
         schema:
@@ -85,10 +88,13 @@
                 - "SIPoHTTP endpoint is not enabled"
                 - "SIP account not found"
       502:
-        description: Bad gateway (SIP server communication error)
+        description: Bad gateway (SIP listener configuration or server communication error)
         schema:
           type: object
           properties:
             error:
               type: string
-              example: "SIP server communication error: Cannot connect to 127.0.0.1:6001"
+              enum:
+                - "Cannot load SIP listener configuration: sipconfig.xml not found"
+                - "Cannot load SIP listener configuration: No SIPoHTTP listener found for institution"
+                - "SIP server communication error: Cannot connect to SIP server"

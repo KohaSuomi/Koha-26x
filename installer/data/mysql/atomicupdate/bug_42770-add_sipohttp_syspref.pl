@@ -1,9 +1,9 @@
 use Modern::Perl;
-use Koha::Installer::Output qw(say_success say_warning say_info);
+use Koha::Installer::Output qw(say_success say_info);
 
 return {
     bug_number  => "42770",
-    description => "Add SIPoHTTP support: enable syspref and SIP account endpoint fields",
+    description => "Add SIPoHTTP support: enable syspref for SIP message HTTP/XML forwarding",
     up          => sub {
         my ($args) = @_;
         my ( $dbh, $out ) = @$args{qw(dbh out)};
@@ -16,22 +16,8 @@ return {
 	}
         );
 
-        # Add fields to sip_accounts table for SIPoHTTP endpoint configuration
-        my $alter_check = $dbh->selectrow_array(
-            q{SELECT COUNT(*) FROM information_schema.COLUMNS 
-              WHERE TABLE_NAME='sip_accounts' AND COLUMN_NAME='sipohttp_host'}
-        );
-
-        unless ($alter_check) {
-            $dbh->do(
-                q{ALTER TABLE sip_accounts 
-                  ADD COLUMN sipohttp_host VARCHAR(255) DEFAULT NULL COMMENT 'SIPoHTTP server host for this account',
-                  ADD COLUMN sipohttp_port INT DEFAULT NULL COMMENT 'SIPoHTTP server port for this account'}
-            );
-        }
-
         say_success( $out, "Added new system preference 'SIPoHTTPEnabled'" );
-        say_success( $out, "Added 'sip_accounts.sipohttp_host' and 'sip_accounts.sipohttp_port' columns" );
-        say_info( $out, "SIPoHTTP REST API endpoint is now available at /api/v1/sipohttp" );
+        say_info( $out, "SIPoHTTP REST API endpoint is now available at /api/v1/sipohttp (when enabled)" );
+        say_info( $out, "SIPoHTTP listeners are configured in sipconfig.xml, same as the built-in SIP2 server" );
     },
 };

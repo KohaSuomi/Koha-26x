@@ -27,6 +27,7 @@ use IO::Socket::INET;
 use Socket qw(:crlf);
 use Try::Tiny;
 use Encode;
+use File::Spec;
 
 =head1 NAME
 
@@ -135,7 +136,7 @@ sub process {
         );
     }
 
-    # Look up SIP account by login_id to get endpoint configuration
+    # Look up SIP account by login_id
     my $sip_account = Koha::SIP2::Accounts->search( { login_id => $login } )->next;
     unless ($sip_account) {
         return $c->render(
@@ -144,13 +145,58 @@ sub process {
         );
     }
 
-    my $sip_host = $sip_account->sipohttp_host;
-    my $sip_port = $sip_account->sipohttp_port;
-
-    unless ( $sip_host && $sip_port ) {
+    # Get SIP institution to look up listener in sipconfig.xml
+    my $institution = $sip_account->sip_institution;
+    unless ($institution) {
         return $c->render(
             status => 400,
-            openapi => { error => 'SIP account does not have SIPoHTTP endpoint configured' }
+            openapi => { error => 'SIP account does not have an associated institution' }
+        );
+    }
+
+    # Load sipconfig.xml and find listener for this institution
+    my ($sip_host, $sip_port);
+    try {
+        my $config_file = File::Spec->catfile( C4::Context->config('etcdir'), 'sipconfig.xml' );
+        unless ( -f $config_file ) {
+            die "sipconfig.xml not found at $config_file";
+        }
+
+        my $parser = XML::LibXML->new();
+        my $doc = $parser->load_xml( location => $config_file );
+        my $xc = XML::LibXML::XPathContext->new( $doc->documentElement() );
+
+        # Register namespace if present
+        $xc->registerNs( 'acs', 'http://openncip.org/acs-config/1.0/' );
+
+        # Find listener for this institution
+        my $institution_name = $institution->name;
+        my $found_listener = 0;
+
+        # Search for service elements that match the institution
+        my @services = $xc->findnodes('//acs:acsconfig/acs:listeners/acs:service');
+        foreach my $service (@services) {
+            my $service_institution = $service->getAttribute('institution');
+            if ( $service_institution && $service_institution eq $institution_name ) {
+                # Extract host and port from service port attribute
+                # Format: host:port/proto or similar
+                my $port_attr = $service->getAttribute('port');
+                if ( $port_attr =~ /^([^:]+):([0-9]+)/ ) {
+                    $sip_host = $1;
+                    $sip_port = $2;
+                    $found_listener = 1;
+                    last;
+                }
+            }
+        }
+
+        unless ($found_listener) {
+            die "No listener found for institution '$institution_name' in sipconfig.xml";
+        }
+    } catch {
+        return $c->render(
+            status => 502,
+            openapi => { error => "Cannot load SIP listener configuration: $_" }
         );
     }
 

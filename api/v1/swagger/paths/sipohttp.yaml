@@ -1,0 +1,94 @@
+/sipohttp:
+  post:
+    x-mojo-to: SIPoHTTP#process
+    operationId: processSIPoHTTP
+    tags:
+      - sipohttp
+    summary: Process SIP2 message via HTTP/XML
+    description: |
+      Forward a SIP2 message to a configured SIP server and return the response.
+      
+      Requires:
+      - SIPoHTTPEnabled system preference to be enabled
+      - Valid SIP account credentials in request
+      - SIP account configured with SIPoHTTP endpoint (host/port)
+      
+      Request XML format:
+      ```xml
+      <?xml version="1.0" encoding="UTF-8"?>
+      <ns1:sip xmlns:ns1="https://koha-suomi.fi/sipschema.xsd" 
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="https://koha-suomi.fi/sipschema.xsd"
+               login="account_login_id" 
+               password="account_password">
+          <request>93USERNAME|PApassword|CI001|AO|</request>
+      </ns1:sip>
+      ```
+    parameters:
+      - name: body
+        in: body
+        description: XML-wrapped SIP2 message
+        required: true
+        schema:
+          type: string
+          example: |
+            <?xml version="1.0" encoding="UTF-8"?>
+            <ns1:sip xmlns:ns1="https://koha-suomi.fi/sipschema.xsd" 
+                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xsi:schemaLocation="https://koha-suomi.fi/sipschema.xsd"
+                     login="staff" 
+                     password="password123">
+                <request>93USERNAME|PApassword|CI001|AO|</request>
+            </ns1:sip>
+    consumes:
+      - application/xml
+      - text/xml
+    produces:
+      - application/xml
+      - text/xml
+    responses:
+      200:
+        description: SIP message processed successfully
+        schema:
+          type: string
+          example: |
+            <?xml version="1.0" encoding="UTF-8"?>
+            <ns1:sip xmlns:ns1="https://koha-suomi.fi/sipschema.xsd"
+                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xsi:schemaLocation="https://koha-suomi.fi/sipschema.xsd">
+                <response>98YYYYYN025005202609231301592.00AOKOHA|BXYYYYYYYYYYYNYYYY|</response>
+            </ns1:sip>
+      400:
+        description: Bad request (invalid XML, missing attributes/elements)
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Invalid XML: Missing login attribute"
+      401:
+        description: Authentication failed
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Authentication failed"
+      404:
+        description: Not found
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              enum:
+                - "SIPoHTTP endpoint is not enabled"
+                - "SIP account not found"
+      502:
+        description: Bad gateway (SIP server communication error)
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "SIP server communication error: Cannot connect to 127.0.0.1:6001"

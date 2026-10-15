@@ -14,12 +14,42 @@
       - SIP account associated with a SIP institution
       - SIP listener configured in sipconfig.xml for the account's institution
       
-      Request XML format:
+      ## XML Schema (XSD)
       ```xml
       <?xml version="1.0" encoding="UTF-8"?>
-      <ns1:sip xmlns:ns1="https://koha-suomi.fi/sipschema.xsd" 
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+                 targetNamespace="https://koha-community.org/documentation/sipschema.xsd"
+                 elementFormDefault="qualified">
+          <xs:element name="sip">
+              <xs:complexType>
+                  <xs:sequence>
+                      <xs:element name="request" type="xs:string" minOccurs="1" maxOccurs="1">
+                          <xs:annotation>
+                              <xs:documentation>SIP2 protocol message (standard SIP2 format)</xs:documentation>
+                          </xs:annotation>
+                      </xs:element>
+                  </xs:sequence>
+                  <xs:attribute name="login" type="xs:string" use="required">
+                      <xs:annotation>
+                          <xs:documentation>SIP account login_id (must match valid Koha staff user)</xs:documentation>
+                      </xs:annotation>
+                  </xs:attribute>
+                  <xs:attribute name="password" type="xs:string" use="required">
+                      <xs:annotation>
+                          <xs:documentation>SIP account password (validated against Koha staff user credentials)</xs:documentation>
+                      </xs:annotation>
+                  </xs:attribute>
+              </xs:complexType>
+          </xs:element>
+      </xs:schema>
+      ```
+      
+      ## Request XML Format
+      ```xml
+      <?xml version="1.0" encoding="UTF-8"?>
+      <ns1:sip xmlns:ns1="https://koha-community.org/documentation/sipschema.xsd" 
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-               xsi:schemaLocation="https://koha-suomi.fi/sipschema.xsd"
+               xsi:schemaLocation="https://koha-community.org/documentation/sipschema.xsd"
                login="account_login_id" 
                password="account_password">
           <request>93USERNAME|PApassword|CI001|AO|</request>
@@ -34,9 +64,9 @@
           type: string
           example: |
             <?xml version="1.0" encoding="UTF-8"?>
-            <ns1:sip xmlns:ns1="https://koha-suomi.fi/sipschema.xsd" 
+            <ns1:sip xmlns:ns1="https://koha-community.org/documentation/sipschema.xsd" 
                      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                     xsi:schemaLocation="https://koha-suomi.fi/sipschema.xsd"
+                     xsi:schemaLocation="https://koha-community.org/documentation/sipschema.xsd"
                      login="staff" 
                      password="password123">
                 <request>93USERNAME|PApassword|CI001|AO|</request>
@@ -54,9 +84,9 @@
           type: string
           example: |
             <?xml version="1.0" encoding="UTF-8"?>
-            <ns1:sip xmlns:ns1="https://koha-suomi.fi/sipschema.xsd"
+            <ns1:sip xmlns:ns1="https://koha-community.org/documentation/sipschema.xsd"
                      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                     xsi:schemaLocation="https://koha-suomi.fi/sipschema.xsd">
+                     xsi:schemaLocation="https://koha-community.org/documentation/sipschema.xsd">
                 <response>98YYYYYN025005202609231301592.00AOKOHA|BXYYYYYYYYYYYNYYYY|</response>
             </ns1:sip>
       400:

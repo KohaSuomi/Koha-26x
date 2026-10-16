@@ -1281,6 +1281,7 @@
                 <th id="item_home_location" data-colname="item_home_location" class="item_location">Home library</th>
                 <th id="item_ccode" data-colname="item_ccode" class="collection">Collection</th>
                 <th id="item_shelving_location" data-colname="item_shelving_location" class="shelving_location">Shelving location</th>
+                <th id="item_sublocation" data-colname="item_sublocation" class="sublocation">Sublocation</th>
                 <th id="item_callnumber" data-colname="item_callnumber" class="call_no">Call number</th>
                 <th id="item_materials" data-colname="item_materials" class="materials">Materials specified</th>
                 <th id="item_enumchron" data-colname="item_enumchron" class="vol_info">Vol info</th>
@@ -1331,6 +1332,7 @@
                         [% hidden_columns_force.$table_id.push('item_itemtype') %]
                         <td></td>
                     [% END %]
+                    <!--HOX! Selvitä tartteeko näihinkin lisätä subloc-->
                     [% IF ( OpacLocationBranchToDisplay == 'holding' || OpacLocationBranchToDisplay == 'both' ) %]
                         [%# Show opac_info or branchurl from holding library %]
                         [% SET holding_library_name = Branches.GetName( ITEM_RESULT.holdingbranch ) %]
@@ -1350,6 +1352,7 @@
 
                             [% IF ( Koha.Preference('OpacLocationOnDetail') == 'holding' || Koha.Preference('OpacLocationOnDetail') == 'both' ) %]
                                 <span class="shelvingloc">[% ITEM_RESULT.location_description | html %]</span>
+                                <span class="subloc">([% ITEM_RESULT.sublocation_description | html %])</span>
                             [% END %]
                         </td>
                     [% ELSE %]
@@ -1377,6 +1380,7 @@
 
                             [% IF ( Koha.Preference('OpacLocationOnDetail') == 'home' || Koha.Preference('OpacLocationOnDetail') == 'both' ) %]
                                 <span class="shelvingloc">[% ITEM_RESULT.location_description | html %]</span>
+                                <span class="subloc">([% ITEM_RESULT.sublocation_description | html %])</span>
                             [% END %]
                         </td>
                     [% ELSE %]
@@ -1395,6 +1399,13 @@
                         <td class="shelving_location"><span class="shelvingloc">[% ITEM_RESULT.location_description | html %]</span></td>
                     [% ELSE %]
                         [% hidden_columns_force.$table_id.push('item_shelving_location') %]
+                        <td></td>
+                    [% END %]
+
+                    [% IF ( Koha.Preference('OpacLocationOnDetail') == 'column' && itemdata_sublocation ) %]
+                        <td class="sublocation"><span class="subloc">[% ITEM_RESULT.sublocation_description | html %]</span></td>
+                    [% ELSE %]
+                        [% hidden_columns_force.$table_id.push('item_sublocation') %]
                         <td></td>
                     [% END %]
 

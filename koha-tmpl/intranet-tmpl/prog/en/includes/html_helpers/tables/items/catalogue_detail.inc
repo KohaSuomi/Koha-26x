@@ -18,6 +18,7 @@
                 <th id="[% tab | html %]_holdingbranch" data-colname="holdingbranch">Current library</th>
                 <th id="[% tab | html %]_homebranch" data-colname="homebranch">Home library</th>
                 <th id="[% tab | html %]_location" data-colname="location">Shelving location</th>
+                <th id="[% tab | html %]_sublocation" data-colname="sublocation">Sublocation</th>
                 <th id="[% tab | html %]_ccode" data-colname="ccode">Collection</th>
                 [% IF Koha.Preference('EnableItemGroups') %]
                     <th id="[% tab | html %]_item_group" data-colname="item_group">Item group</th>
@@ -111,6 +112,7 @@
         const can_edit_items_from = [% To.json(can_edit_items_from || []) | $raw %];
         const item_type_image_locations = [% To.json(item_type_image_locations) | $raw %];
         const av_loc = new Map([% To.json(AuthorisedValues.GetDescriptionsByKohaField({ kohafield => 'items.location' })) | $raw %].map( av => [av.lib, av.authorised_value]));
+        const av_subloc = new Map([% To.json(AuthorisedValues.GetDescriptionsByKohaField({ kohafield => 'items.sublocation' })) | $raw %].map( av => [av.authorised_value, av.lib]));
         const av_lost = new Map([% To.json(AuthorisedValues.GetDescriptionsByKohaField({ kohafield => 'items.itemlost' })) | $raw %].map( av => [av.authorised_value, av.lib]));
         const av_withdrawn = new Map([% To.json(AuthorisedValues.GetDescriptionsByKohaField({ kohafield => 'items.withdrawn' })) | $raw %].map( av => [av.authorised_value, av.lib]));
         const av_damaged = new Map([% To.json(AuthorisedValues.GetDescriptionsByKohaField({ kohafield => 'items.damaged' })) | $raw %].map( av => [av.authorised_value, av.lib]));
@@ -481,6 +483,15 @@
                         }
                         nodes += "</span>";
                         return nodes;
+                    },
+                },
+                {
+                    data: "me.sublocation",
+                    datatype: "coded_value:sublocation",
+                    searchable: true,
+                    orderable: true,
+                    render: function (data, type, row, meta) {
+                        return escape_str(row._strings.sublocation ? row._strings.sublocation.str : row.sublocation);
                     },
                 },
                 {

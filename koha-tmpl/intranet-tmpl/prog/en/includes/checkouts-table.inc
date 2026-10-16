@@ -30,6 +30,7 @@
                     <th data-colname="item_type" scope="col">Item type</th>
                     <th data-colname="collection" scope="col">Collection</th>
                     <th data-colname="location" scope="col">Location</th>
+                    <th data-colname="sublocation" scope="col">Sublocation</th>
                     <th data-colname="homebranch" scope="col">Home library</th>
                     <th data-colname="checkout_on_unformatted" scope="col">&nbsp;</th>
                     <th data-colname="checkout_on" scope="col">Checked out on</th>

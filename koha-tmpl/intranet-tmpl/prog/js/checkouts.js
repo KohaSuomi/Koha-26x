@@ -285,18 +285,26 @@ function LoadIssuesTable() {
                 },
                 {
                     data: function (oObj) {
+                        return oObj.sublocation
+                            ? oObj.sublocation.escapeHtml()
+                            : "";
+                    },
+                    orderData: [1, 9],
+                },
+                {
+                    data: function (oObj) {
                         return oObj.homebranch
                             ? oObj.homebranch.escapeHtml()
                             : "";
                     },
-                    orderData: [1, 9],
+                    orderData: [1, 10],
                 },
                 {
                     data: "issuedate",
                     visible: false,
                 },
                 {
-                    orderData: [1, 10], // Sort on hidden unformatted issuedate column
+                    orderData: [1, 11], // Sort on hidden unformatted issuedate column
                     data: function (oObj) {
                         return $datetime(oObj.issuedate, {
                             no_tz_adjust: true,
@@ -309,7 +317,7 @@ function LoadIssuesTable() {
                             ? oObj.branchname.escapeHtml()
                             : "";
                     },
-                    orderData: [1, 12],
+                    orderData: [1, 13],
                 },
                 {
                     data: function (oObj) {
@@ -317,7 +325,7 @@ function LoadIssuesTable() {
                             ? oObj.itemcallnumber.escapeHtml()
                             : "";
                     },
-                    orderData: [1, 13],
+                    orderData: [1, 14],
                 },
                 {
                     data: function (oObj) {
@@ -325,7 +333,7 @@ function LoadIssuesTable() {
                             ? oObj.copynumber.escapeHtml()
                             : "";
                     },
-                    orderData: [1, 14],
+                    orderData: [1, 15],
                 },
                 {
                     data: function (oObj) {
@@ -336,7 +344,7 @@ function LoadIssuesTable() {
                             "<span>"
                         );
                     },
-                    orderData: [1, 15],
+                    orderData: [1, 16],
                     className: "nowrap",
                 },
                 {
@@ -348,7 +356,7 @@ function LoadIssuesTable() {
                             "<span>"
                         );
                     },
-                    orderData: [1, 16],
+                    orderData: [1, 17],
                     className: "nowrap",
                 },
                 {
@@ -360,7 +368,7 @@ function LoadIssuesTable() {
                             "<span>"
                         );
                     },
-                    orderData: [1, 17],
+                    orderData: [1, 18],
                     className: "nowrap",
                 },
                 {

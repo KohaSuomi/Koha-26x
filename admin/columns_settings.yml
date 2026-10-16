@@ -513,6 +513,8 @@ modules:
             -
               columnname: location
             -
+              columnname: sublocation
+            -
               columnname: ccode
             -
               columnname: item_group
@@ -586,6 +588,8 @@ modules:
               columnname: homebranch
             -
               columnname: location
+            -
+              columnname: sublocation
             -
               columnname: ccode
             -
@@ -869,6 +873,8 @@ modules:
               columnname: timestamp
             -
               columnname: location
+            -
+              columnname: sublocation
             -
               columnname: onloan
             -
@@ -1351,6 +1357,8 @@ modules:
               columnname: collection
             -
               columnname: location
+            -
+              columnname: sublocation
             -
               columnname: homebranch
             -
@@ -2466,6 +2474,9 @@ modules:
               columnname: item_ccode
             -
               columnname: item_shelving_location
+              is_hidden: 1
+            -
+              columnname: item_sublocation
               is_hidden: 1
             -
               columnname: item_callnumber

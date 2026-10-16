@@ -29,7 +29,7 @@ use C4::Context;
 use C4::Circulation qw( barcodedecode GetBranchItemRule );
 use C4::Reserves;
 use C4::ClassSource qw( GetClassSort );
-use C4::Log         qw( logaction );
+use C4::Log qw( logaction );
 
 use Koha::BackgroundJob::BatchUpdateBiblioHoldsQueue;
 use Koha::Biblio::ItemGroups;
@@ -180,7 +180,7 @@ sub store {
 
             # If the field has changed otherwise, we much update
             # the 'on' field
-            elsif ( exists $updated_columns{$field}
+            elsif (exists $updated_columns{$field}
                 && $updated_columns{$field}
                 && !$pre_mod_item->$field )
             {
@@ -390,7 +390,7 @@ sub safe_to_delete {
         {
             itemnumber => undef,
         }
-        )->count;
+    )->count;
 
     if ($error) {
         return Koha::Result::Boolean->new(0)->add_message( { message => $error } );
@@ -1572,8 +1572,8 @@ sub columns_to_str {
               $subfield
             ? $subfield->{authorised_value}
                 ? C4::Biblio::GetAuthorisedValueDesc(
-                $itemtagfield,
-                $subfield->{tagsubfield}, $value, '', $tagslib
+                    $itemtagfield,
+                    $subfield->{tagsubfield}, $value, '', $tagslib
                 )
                 : $value
             : $value;
@@ -1797,8 +1797,7 @@ sub _set_found_trigger {
                             if ($lost_fee_payment) {
                                 my $today = dt_from_string();
                                 my $payment_age_in_days =
-                                    dt_from_string( $lost_fee_payment->created_on )
-                                    ->delta_days($today)
+                                    dt_from_string( $lost_fee_payment->created_on )->delta_days($today)
                                     ->in_units('days');
                                 if ( $payment_age_in_days > $no_refund_if_lost_fee_paid_age ) {
                                     $self->add_message(
@@ -2121,6 +2120,7 @@ sub to_api_mapping {
         stocknumber              => 'inventory_number',
         new_status               => 'new_status',
         deleted_on               => undef,
+        sublocation              => 'sublocation'
     };
 }
 

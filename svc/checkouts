@@ -22,9 +22,9 @@ use Modern::Perl;
 use CGI;
 use JSON qw(to_json);
 
-use C4::Auth        qw(check_cookie_auth haspermission);
+use C4::Auth qw(check_cookie_auth haspermission);
 use C4::Circulation qw(GetIssuingCharges CanBookBeRenewed GetRenewCount );
-use C4::Overdues    qw(GetFine);
+use C4::Overdues qw(GetFine);
 use C4::Context;
 
 use Koha::AuthorisedValues;
@@ -113,6 +113,7 @@ my $sql = '
         items.itemlost,
         items.damaged,
         items.location,
+        items.sublocation,
         items.enumchron,
         items.materials,
 
@@ -191,6 +192,12 @@ while ( my $c = $sth->fetchrow_hashref() ) {
             { kohafield => 'items.location', authorised_value => $c->{location} } );
         $location = $av->{lib} ? $av->{lib} : '';
     }
+    my $sublocation;
+    if ( $c->{sublocation} ) {
+        my $av = Koha::AuthorisedValues->get_description_by_koha_field(
+            { kohafield => 'items.sublocation', authorised_value => $c->{sublocation} } );
+        $sublocation = $av->{lib} ? $av->{lib} : '';
+    }
     my $collection;
     if ( $c->{collection} ) {
         my $av = Koha::AuthorisedValues->get_description_by_koha_field(
@@ -259,6 +266,7 @@ while ( my $c = $sth->fetchrow_hashref() ) {
         recordtype_description => $recordtype    || q{},
         collection             => $collection,
         location               => $location,
+        sublocation            => $sublocation,
         homebranch             => $c->{homebranch},
         itemnotes              => $c->{itemnotes},
         itemnotes_nonpublic    => $c->{itemnotes_nonpublic},

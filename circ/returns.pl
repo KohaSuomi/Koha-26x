@@ -34,12 +34,12 @@ use Modern::Perl;
 use CGI qw ( -utf8 );
 use DateTime;
 
-use C4::Auth        qw( get_template_and_user get_session haspermission );
+use C4::Auth qw( get_template_and_user get_session haspermission );
 use C4::Circulation qw( barcodedecode GetBranchItemRule AddReturn LostItem );
 use C4::Context;
 use C4::Members::Messaging;
 use C4::Members;
-use C4::Output   qw( output_html_with_http_headers );
+use C4::Output qw( output_html_with_http_headers );
 use C4::Reserves qw( ModReserve ModReserveAffect CheckReserves );
 use C4::RotatingCollections;
 use Koha::AuthorisedValues;
@@ -786,6 +786,11 @@ my $shelflocations = {
         { frameworkcode => '', kohafield => 'items.location' }
     )
 };
+my $sublocation = {
+    map { $_->{authorised_value} => $_->{lib} } Koha::AuthorisedValues->get_descriptions_by_koha_field(
+        { frameworkcode => '', kohafield => 'items.sublocation' }
+    )
+};
 for my $checkin (@checkins) {
     my $item = Koha::Items->find( { barcode => $checkin->{barcode} } );
     next unless $item;    # FIXME The item has been deleted in the meantime,
@@ -814,6 +819,10 @@ for my $checkin (@checkins) {
     my $shelfcode = $checkin->{item_location};
     $checkin->{item_location} = $shelflocations->{$shelfcode}
         if ( defined($shelfcode) && defined($shelflocations) && exists( $shelflocations->{$shelfcode} ) );
+    $checkin->{sublocation} = $sublocation->{ $item->sublocation }
+        if ( defined( $item->sublocation )
+        && defined($sublocation)
+        && exists( $sublocation->{ $item->sublocation } ) );
 }
 
 $template->param(

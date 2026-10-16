@@ -1325,6 +1325,7 @@
                         <th class="ci-transferlibrary">Transfer to</th>
                         <th class="ci-transferreason">Transfer reason</th>
                         <th class="ci-shelvinglocation">Shelving location</th>
+                        <th class="ci-sublocation">Sublocation</th>
                         <th class="ci-callnumber">Call number</th>
                         <th class="ci-dateaccessioned">Date acquired</th>
                         <th class="ci-recordlevelitemtype">Record-level itemtype</th>
@@ -1407,6 +1408,7 @@
                         <td class="ci-shelvinglocation">
                             <span class="shelvingloc">[% checkin.item_location | html %]</span>
                         </td>
+                        <td class="ci-subloaction">[% checkin.sublocation | html %]</td>
                         <td class="ci-callnumber"> [% checkin.item.itemcallnumber | html %] </td>
                         <td class="ci-dateaccessioned"> [% checkin.item.dateaccessioned | $KohaDates %] </td>
                         <td class="ci-recordlevelitemtype"> [% ItemTypes.GetDescription( checkin.biblio.itemtype ) | html %] </td>

@@ -21,20 +21,20 @@
 
 use Modern::Perl;
 
-use CGI             qw ( -utf8 );
+use CGI qw ( -utf8 );
 use C4::Acquisition qw( SearchOrders );
-use C4::Auth        qw( get_template_and_user get_session );
-use C4::Koha        qw(
+use C4::Auth qw( get_template_and_user get_session );
+use C4::Koha qw(
     getitemtypeimagelocation
     GetNormalizedEAN
     GetNormalizedISBN
     GetNormalizedOCLCNumber
     GetNormalizedUPC
 );
-use C4::Search  qw( new_record_from_zebra searchResults getRecords );
+use C4::Search qw( new_record_from_zebra searchResults getRecords );
 use C4::Serials qw( CountSubscriptionFromBiblionumber SearchSubscriptions GetLatestSerials );
-use C4::Output  qw( parametrized_url output_html_with_http_headers redirect_if_opac_suppressed );
-use C4::Biblio  qw(
+use C4::Output qw( parametrized_url output_html_with_http_headers redirect_if_opac_suppressed );
+use C4::Biblio qw(
     CountItemsIssued
     GetBiblioData
     GetMarcISBN
@@ -43,9 +43,9 @@ use C4::Biblio  qw(
     GetMarcSubjects
     GetMarcUrls
 );
-use C4::Record              qw( marc2cites );
-use C4::Tags                qw( get_tags );
-use C4::XISBN               qw( get_xisbns );
+use C4::Record qw( marc2cites );
+use C4::Tags qw( get_tags );
+use C4::XISBN qw( get_xisbns );
 use C4::External::Amazon    qw( get_amazon_tld );
 use C4::External::Syndetics qw(
     get_syndetics_anotes
@@ -56,10 +56,10 @@ use C4::External::Syndetics qw(
     get_syndetics_toc
 );
 use C4::Members;
-use C4::XSLT         qw( XSLTParse4Display );
+use C4::XSLT qw( XSLTParse4Display );
 use C4::ShelfBrowser qw( GetNearbyItems );
-use C4::Reserves     qw( GetReserveStatus IsAvailableForItemLevelRequest );
-use C4::Charset      qw( SetUTF8Flag );
+use C4::Reserves qw( GetReserveStatus IsAvailableForItemLevelRequest );
+use C4::Charset qw( SetUTF8Flag );
 use MARC::Field;
 use List::MoreUtils qw( any );
 use C4::HTML5Media;
@@ -533,6 +533,11 @@ my $shelflocations = {
         { frameworkcode => $dat->{frameworkcode}, kohafield => 'items.location' }
     )
 };
+my $sublocations = {
+    map { $_->{authorised_value} => $_->{opac_description} } Koha::AuthorisedValues->get_descriptions_by_koha_field(
+        { frameworkcode => $dat->{frameworkcode}, kohafield => 'items.sublocation' }
+    )
+};
 my $collections = {
     map { $_->{authorised_value} => $_->{opac_description} } Koha::AuthorisedValues->get_descriptions_by_koha_field(
         { frameworkcode => $dat->{frameworkcode}, kohafield => 'items.ccode' }
@@ -743,6 +748,10 @@ if ( not $viewallitems and $items->count > $max_items_to_display ) {
             $item_info->{'location_description'} = $shelflocations->{ $item->location };
         }
 
+        if ( defined $item->sublocation ) {
+            $item_info->{'sublocation_description'} = $sublocations->{ $item->sublocation };
+        }
+
         my $itemtype = $item->itemtype;
         $item_info->{'imageurl'} = getitemtypeimagelocation(
             'opac',
@@ -755,7 +764,8 @@ if ( not $viewallitems and $items->count > $max_items_to_display ) {
         if ( $item_info->{checkout} && $item_info->{checkout} > 0 ) { $item_checkouts = 1; }
 
         foreach my $field (
-            qw(ccode materials enumchron copynumber itemnotes location_description uri barcode itemcallnumber))
+            qw(ccode materials enumchron copynumber itemnotes location_description sublocation_description uri barcode itemcallnumber)
+            )
         {
             $itemfields{$field} = 1 if $item_info->{$field};
         }
@@ -835,6 +845,7 @@ $template->param(
     itemdata_copynumber     => $itemfields{copynumber},
     itemdata_itemnotes      => $itemfields{itemnotes},
     itemdata_location       => $itemfields{location_description},
+    itemdata_sublocation    => $itemfields{sublocation_description},
     itemdata_barcode        => $itemfields{barcode},
     itemdata_itemcallnumber => $itemfields{itemcallnumber},
     OpacStarRatings         => C4::Context->preference("OpacStarRatings"),

@@ -28,6 +28,13 @@ use Socket qw(:crlf);
 use Try::Tiny;
 use Encode;
 use File::Spec;
+use Log::Log4perl;
+use File::Basename;
+
+# Initialize Logger
+my $log_conf = dirname($ENV{'KOHA_CONF'}) . "/log4perl.conf";
+Log::Log4perl::init($log_conf);
+my $log = Log::Log4perl->get_logger('sipohttp');
 
 =head1 NAME
 
@@ -76,6 +83,7 @@ sub process {
 
     # Check if SIPoHTTP is enabled
     unless ( C4::Context->preference('SIPoHTTPEnabled') ) {
+        $log->error('SIPoHTTP endpoint is not enabled');
         return $c->render(
             status => 404,
             openapi => { error => 'SIPoHTTP endpoint is not enabled' }
@@ -83,8 +91,10 @@ sub process {
     }
 
     my $body = $c->req->body || $c->param('query') || '';
+    $log->debug("Received request XML: " . $body);
 
     unless ($body) {
+        $log->error('Request body is empty');
         return $c->render(
             status => 400,
             openapi => { error => 'Request body is empty' }
@@ -121,24 +131,32 @@ sub process {
             die 'Missing request element';
         }
     } catch {
+        $log->error("Invalid XML: $_");
         return $c->render(
             status => 400,
             openapi => { error => "Invalid XML: $_" }
         );
     };
 
+    $log->debug("Extracted login: $login");
+    $log->debug("SIP message extracted: $sip_message");
+
     # Authenticate using SIP account credentials
     my $auth_ok = checkpw_internal( $login, $password );
     unless ($auth_ok) {
+        $log->error("Authentication failed for $login");
         return $c->render(
             status => 401,
             openapi => { error => 'Authentication failed' }
         );
     }
 
+    $log->debug("Authentication successful for $login");
+
     # Look up SIP account by login_id
     my $sip_account = Koha::SIP2::Accounts->search( { login_id => $login } )->next;
     unless ($sip_account) {
+        $log->error("SIP account not found for login: $login");
         return $c->render(
             status => 404,
             openapi => { error => 'SIP account not found' }
@@ -148,6 +166,7 @@ sub process {
     # Get SIP institution to look up listener in sipconfig.xml
     my $institution = $sip_account->sip_institution;
     unless ($institution) {
+        $log->error("SIP account $login does not have an associated institution");
         return $c->render(
             status => 400,
             openapi => { error => 'SIP account does not have an associated institution' }
@@ -194,14 +213,19 @@ sub process {
             die "No listener found for institution '$institution_name' in sipconfig.xml";
         }
     } catch {
+        $log->error("Cannot load SIP listener configuration: $_");
         return $c->render(
             status => 502,
             openapi => { error => "Cannot load SIP listener configuration: $_" }
         );
-    }
+    };
 
     # Forward message to SIP server
     my $sip_response;
+    my $sip_request_start_time;
+    my $sip_response_recv_time;
+    my $response_time;
+    
     try {
         my $socket = IO::Socket::INET->new(
             PeerAddr => $sip_host,
@@ -213,11 +237,26 @@ sub process {
         my $terminator = $CRLF;
         $/ = $terminator;
 
+        $log->debug("Sending command message for user $login");
+
+        $sip_request_start_time = time();
+
         # Send SIP message
         print $socket $sip_message . $terminator;
 
+        # Log based on message type (login/ping vs regular)
+        if (($sip_message =~ /^9300/) || ($sip_message =~ /^9900/)) {
+            $log->debug("$login ---> $sip_message");
+        }
+        else {
+            $log->info("$login ---> $sip_message");
+        }
+
         # Receive response
         $socket->recv( $sip_response, 8192 );
+
+        $sip_response_recv_time = time();
+        $response_time = ($sip_response_recv_time - $sip_request_start_time);
 
         $socket->shutdown(2);
         $socket->close();
@@ -225,14 +264,33 @@ sub process {
         # Clean up response
         $sip_response =~ s/\r//g;
         $sip_response =~ s/\n//g;
+
+        # Log response and check for slow response
+        if ($sip_message =~ /^(9300|9900)/) {
+            my $msg_type = $1 eq '9300' ? 'login' : 'ping';
+            if ($response_time > 1) {
+                $log->warn("$login ---> $sip_message");
+                $log->warn("$login <--- $sip_response");
+                $log->warn("Slow response ($response_time sec) from sip server for $msg_type message: $sip_message");
+            }
+        }
+        else {
+            if ($response_time > 4) {
+                $log->warn("Slow response ($response_time sec) from sip server for command message: $sip_message");
+            }
+            $log->info("$login <--- $sip_response");
+        }
+
+        $log->debug("Received: $sip_response");
     } catch {
+        $log->error("SIP server communication error: $_");
         return $c->render(
             status => 502,
             openapi => { error => "SIP server communication error: $_" }
         );
     };
 
-    # Build XML response
+    $log->debug("SIP message processed successfully for login: $login");
     my $xml_response = _build_xml_response($sip_response);
 
     return $c->render( 

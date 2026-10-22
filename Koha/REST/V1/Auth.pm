@@ -83,9 +83,11 @@ sub under {
         }
 
         if (   $c->req->url->to_abs->path =~ m#^/api/v1/oauth/#
-            || $c->req->url->to_abs->path =~ m#^/api/v1/public/oauth/# )
+            || $c->req->url->to_abs->path =~ m#^/api/v1/public/oauth/#
+            || $c->req->url->to_abs->path =~ m#^/api/v1/sipohttp# )
         {
-            # Requesting OAuth endpoints shouldn't go through the API authentication chain
+            # Requesting OAuth and SIPoHTTP endpoints shouldn't go through the API authentication chain
+            # SIPoHTTP authenticates via XML attributes in the request body
             $status = 1;
         } elsif ( $namespace eq '' or $namespace eq '.html' ) {
             $status = 1;

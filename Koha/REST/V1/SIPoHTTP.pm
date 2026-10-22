@@ -21,20 +21,13 @@ use Mojo::Base 'Mojolicious::Controller';
 use C4::Auth qw(checkpw_internal);
 use C4::Context;
 use Koha::Exceptions;
+use Koha::Logger;
 use Koha::SIP2::Accounts;
 use XML::LibXML;
 use IO::Socket::INET;
 use Socket qw(:crlf);
 use Try::Tiny;
 use Encode;
-use File::Spec;
-use Log::Log4perl;
-use File::Basename;
-
-# Initialize Logger
-my $log_conf = dirname($ENV{'KOHA_CONF'}) . "/log4perl.conf";
-Log::Log4perl::init($log_conf);
-my $log = Log::Log4perl->get_logger('sipohttp');
 
 =head1 NAME
 
@@ -80,6 +73,10 @@ Process a SIP2 message forwarded via HTTP.
 
 sub process {
     my $c = shift;
+
+    # Initialize logger using Koha's logging infrastructure
+    my $log = Koha::Logger->get({ category => 'sipohttp' });
+    $log->info('SIPoHTTP logger initialized');
 
     # Check if SIPoHTTP is enabled
     unless ( C4::Context->preference('SIPoHTTPEnabled') ) {
@@ -164,7 +161,7 @@ sub process {
     }
 
     # Get SIP institution to look up listener in sipconfig.xml
-    my $institution = $sip_account->sip_institution;
+    my $institution = $sip_account->institution;
     unless ($institution) {
         $log->error("SIP account $login does not have an associated institution");
         return $c->render(

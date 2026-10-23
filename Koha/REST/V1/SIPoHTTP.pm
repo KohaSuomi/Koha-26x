@@ -438,7 +438,11 @@ sub extractServer {
     #foreach my $file (glob("$CONFPATH/SIPconfig/*.xml")) {
 
     # SIP configuration has been moved to a single file sipconfig.xml under KOHA_CONF -path
-    my $file = "$CONFPATH/sipconfig.xml";
+    # Try SIPConfig.xml first, fall back to sipconfig.xml
+    my $file = "$CONFPATH/SIPConfig/SIPConfig.xml";
+    unless (-e $file) {
+        $file = "$CONFPATH/sipconfig.xml";
+    }
 
         my $parser = XML::LibXML->new();
         my $doc    = XML::LibXML->load_xml(location => $file);

@@ -21,7 +21,7 @@ use Mojo::Base 'Mojolicious::Controller';
 use C4::Auth qw(checkpw_internal);
 use C4::Context;
 use Koha::Exceptions;
-use Koha::Logger;
+use Log::Log4perl;
 use Koha::SIP2::Accounts;
 use XML::LibXML;
 use IO::Socket::INET;
@@ -76,8 +76,8 @@ Process a SIP2 message forwarded via HTTP.
 sub process {
     my $c = shift;
 
-    # Initialize logger using Koha's logging infrastructure
-    my $log = Koha::Logger->get({ category => 'sipohttp' });
+    # Initialize logger directly using Log::Log4perl to log to sipohttp.log
+    my $log = Log::Log4perl->get_logger('sipohttp');
     $log->info('SIPoHTTP logger initialized');
 
     # Check if SIPoHTTP is enabled

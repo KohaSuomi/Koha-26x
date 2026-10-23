@@ -432,6 +432,7 @@ sub extractServer {
 
     my ($xmlmessage, $c)    = @_;
     my ($term,       $pass) = getLogin($xmlmessage);
+    my $CONFPATH = dirname(C4::Context->config('kohaconf'));
 
     #Handle all sip config XML files under /KOHA_CONF/SIPconfig
     #foreach my $file (glob("$CONFPATH/SIPconfig/*.xml")) {
@@ -497,6 +498,7 @@ sub validateXml {
     #For validating the content of the XML SIP message
     my ($c, $xmlbody) = @_;
     my $parser = XML::LibXML->new();
+    my $KOHAPATH = C4::Context->config('intranetdir');
 
     # parse and validate the xml against sipschema
     # https://koha-suomi.fi/sipschema.xsd

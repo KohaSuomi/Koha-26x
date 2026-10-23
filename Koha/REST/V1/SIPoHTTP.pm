@@ -73,12 +73,12 @@ Process a SIP2 message forwarded via HTTP.
 
 =cut
 
-sub process {
-    my $c = shift;
+# Initialize logger directly using Log::Log4perl to log to sipohttp.log
+my $log = Log::Log4perl->get_logger('sipohttp');
 
-    # Initialize logger directly using Log::Log4perl to log to sipohttp.log
-    my $log = Log::Log4perl->get_logger('sipohttp');
-    $log->info('SIPoHTTP logger initialized');
+sub process {
+
+    my $c = shift->openapi->valid_input or return;
 
     # Check if SIPoHTTP is enabled
     unless ( C4::Context->preference('SIPoHTTPEnabled') ) {
@@ -89,270 +89,426 @@ sub process {
         );
     }
 
-    my $body = $c->req->body || $c->param('query') || '';
-    $log->debug("Received request XML: " . $body);
+    my $body       = $c->req->body;
+    my $xmlrequest = $c->param('query') || $body || '';
 
-    unless ($body) {
-        $log->error('Request body is empty');
-        return $c->render(
-            status => 400,
-            openapi => { error => 'Request body is empty' }
-        );
+    $log->debug("Request received.");
+
+    $log->debug("Received request XML: ". $xmlrequest);
+
+    #my $validation = validateXml( $c, $xmlrequest );
+    my $validation = 1;
+
+    if ($validation != 1) {
+
+        $c->render(text => "Invalid Request. XML Validation failed.", status => 400);
+
+        return;
     }
 
-    # TODO: Support JSON input format in addition to XML
-    # Check Content-Type header to determine input format (application/json vs application/xml)
-    # For now, default to XML parsing
-    
-    # Parse XML request
-    my ( $login, $password, $sip_message );
-    try {
-        my $parser = XML::LibXML->new();
-        my $doc    = $parser->load_xml( string => $body );
-        my $xc     = XML::LibXML::XPathContext->new( $doc->documentElement() );
+    #process sip here
+    my ($login, $password) = getLogin($xmlrequest);
 
-        # Register namespace for XPath queries
-        $xc->registerNs( 'ns1', 'https://koha-suomi.fi/sipschema.xsd' );
+    if (!$login or !$password) {
 
-        # Extract attributes from root element
-        my ($root) = $xc->findnodes('//ns1:sip');
-        if ($root) {
-            $login    = $root->getAttribute('login') or die 'Missing login attribute';
-            $password = $root->getAttribute('password') or die 'Missing password attribute';
-        } else {
-            die 'Missing root sip element';
-        }
+        $log->error("Invalid request. Missing login/pw in XML.");
 
-        # Extract SIP message from request element (try with namespace, then without)
-        my ($request_node) = $xc->findnodes('//ns1:request');
-        $request_node = ($xc->findnodes('//request'))[0] unless $request_node;
-        if ($request_node) {
-            $sip_message = $request_node->textContent;
-            $sip_message =~ s/\r//g;
-            $sip_message =~ s/\n//g;
-        } else {
-            die 'Missing request element';
-        }
+        $c->render(text => "Invalid request. Missing login/pw in XML.", status => 400);
+        return;
+    }
+
+    my $sipmes = extractSip($xmlrequest, $c);
+
+    unless ($sipmes) {
+
+        $log->error("Invalid request. Missing SIP Request in XML.");
+
+        $c->render(text => "Invalid request. Missing SIP Request in XML.", status => 400);
+        return;
+    }
+
+    # Check if the command message starts with '99'
+    if ($sipmes =~ /^99/) {
+        handle_99($c, $login, $password, $sipmes);
+        return;
+    }
+
+    my ($siphost, $sipport) = extractServer($xmlrequest, $c);
+
+    unless ($siphost && $sipport) {
+
+        $log->error("No config found for login device. ");
+
+        return $c->render(text => "No config found for login device. ", status => 400);
+    }
+
+    my $sipresponse = tradeSip($login, $password, $siphost, $sipport, $sipmes, $c);
+
+    #remove carriage return/line feed from response
+    $sipresponse =~ s/\r//g;
+    $sipresponse =~ s/\n//g;
+
+    my $xmlresponse = buildXml($sipresponse);
+
+    return try {
+        $c->render(status => 200, text => $xmlresponse);
+        $log->debug("XML response passed to endpoint.");
     } catch {
-        $log->error("Invalid XML: $_");
-        return $c->render(
-            status => 400,
-            openapi => { error => "Invalid XML: $_" }
-        );
-    };
-
-    $log->debug("Extracted login: $login");
-    $log->debug("SIP message extracted: $sip_message");
-
-    # Authenticate using SIP account credentials
-    my $auth_ok = checkpw_internal( $login, $password );
-    unless ($auth_ok) {
-        $log->error("Authentication failed for $login");
-        return $c->render(
-            status => 401,
-            openapi => { error => 'Authentication failed' }
-        );
+        Koha::Exceptions::rethrow_exception($_);
     }
+}
 
-    $log->debug("Authentication successful for $login");
+sub tradeSip {
 
-    # Look up SIP account by login_id
-    my $sip_account = Koha::SIP2::Accounts->search( { login_id => $login } )->next;
-    unless ($sip_account) {
-        $log->error("SIP account not found for login: $login");
-        return $c->render(
-            status => 404,
-            openapi => { error => 'SIP account not found' }
-        );
-    }
-
-    # Get SIP institution to look up listener in sipconfig.xml
-    my $institution = $sip_account->institution;
-    unless ($institution) {
-        $log->error("SIP account $login does not have an associated institution");
-        return $c->render(
-            status => 400,
-            openapi => { error => 'SIP account does not have an associated institution' }
-        );
-    }
-
-    # Load sipconfig.xml and find listener for this institution
-    my ($sip_host, $sip_port);
-    try {
-        my $config_dir = dirname($ENV{'KOHA_CONF'});
-        $log->debug("Looking for SIPConfig.xml in $config_dir");
-        my $config_file = File::Spec->catfile( $config_dir, 'SIPconfig', 'SIPconfig.xml' );
-        unless ( -f $config_file ) {
-            $config_file = File::Spec->catfile( $config_dir, 'sipconfig.xml' );
-            unless ( -f $config_file ) {
-                die "SIPconfig.xml not found at $config_dir/SIPconfig/SIPconfig.xml or $config_dir/sipconfig.xml";
-            }
-        }
-
-        $log->debug("Loading SIP config from: $config_file");
-
-        my $parser = XML::LibXML->new();
-        my $doc = $parser->load_xml( location => $config_file );
-        my $xc = XML::LibXML::XPathContext->new( $doc->documentElement() );
-
-        # Register namespace from SIPConfig.xml
-        $xc->registerNs( 'acs', 'http://openncip.org/acs-config/1.0/' );
-
-        # Find the SIP account by login_id and get its sipohttp service reference
-        my $login_node = $xc->findnodes("//acs:accounts/acs:login[\@id='$login']")->[0];
-        die "SIP account '$login' not found in configuration" unless $login_node;
-
-        my $sipohttp_service_ref = $login_node->getAttribute('sipohttp');
-        die "SIP account '$login' does not have sipohttp attribute configured" unless $sipohttp_service_ref;
-
-        $log->debug("SIP account '$login' references sipohttp service: $sipohttp_service_ref");
-
-        # Find the sipohttp service by name
-        my $sipohttp_service = $xc->findnodes("//acs:sipohttp/acs:service[\@name='$sipohttp_service_ref']")->[0];
-        die "SIPoHTTP service '$sipohttp_service_ref' not found in configuration" unless $sipohttp_service;
-
-        $sip_host = $sipohttp_service->getAttribute('host');
-        $sip_port = $sipohttp_service->getAttribute('port');
-
-        die "SIPoHTTP service '$sipohttp_service_ref' missing host attribute" unless $sip_host;
-        die "SIPoHTTP service '$sipohttp_service_ref' missing port attribute" unless $sip_port;
-
-        $log->debug("Found SIPoHTTP service: host=$sip_host, port=$sip_port");
-
-    } catch {
-        $log->error("Cannot load SIP listener configuration: $_");
-        return $c->render(
-            status => 502,
-            openapi => { error => "Cannot load SIP listener configuration: $_" }
-        );
-    };
-
-    # Forward message to SIP server
-    my $sip_response;
     my $sip_request_start_time;
     my $sip_response_recv_time;
     my $response_time;
-    
-    try {
-        my $socket = IO::Socket::INET->new(
-            PeerAddr => $sip_host,
-            PeerPort => $sip_port,
-            Proto    => 'tcp'
-        ) or die "Cannot connect to SIP server at $sip_host:$sip_port: $!";
 
-        $socket->autoflush(1);
-        my $terminator = $CRLF;
-        $/ = $terminator;
+    my ($login, $password, $host, $port, $command_message, $c) = @_;
 
-        $log->debug("Sending command message for user $login");
+    my $sipsock = IO::Socket::INET->new(PeerAddr => $host, PeerPort => $port, Proto => 'tcp')
+        or die $log->fatal("Can't create a socket for sipserver. Sipserver down?");
+
+    $sipsock->autoflush(1);
+
+    my $loginsip = buildLogin($login, $password);
+
+    my $terminator = q{};
+    $terminator = ($terminator eq 'CR') ? $CR : $CRLF;
+
+    # Set perl to expect the same record terminator it is sending
+    $/ = $terminator;
+
+    $log->debug("Trying login: $loginsip");
+
+    my $respdata = "";
+
+    $sip_request_start_time = time();
+
+    print $sipsock $loginsip . $terminator;
+
+    $log->debug($login . " ---> ". $loginsip);
+
+    $sipsock->recv($respdata, 1024);
+
+    $sip_response_recv_time = time();
+
+    $response_time = ($sip_response_recv_time - $sip_request_start_time);
+
+    if ($response_time > 4) {
+        $log->warn ("Slow response (". $response_time . "sec) from sip server for login message 93 (". $login . ": ".     $loginsip .")");
+    }
+
+    $log->debug($login . " <--- " . $respdata);
+
+    $sipsock->flush;
+
+    #remove carriage return/line feed from response
+    $respdata =~ s/\r//g;
+    $respdata =~ s/\n//g;
+
+    $respdata = substr($respdata, 0, 3);
+
+    if ($respdata eq '941') {
+
+        $log->debug("Login OK. Sending: $command_message");
 
         $sip_request_start_time = time();
 
-        # Send SIP message
-        print $socket $sip_message . $terminator;
+        print $sipsock $command_message . $terminator;
 
-        # Log based on message type (login/ping vs regular)
-        if (($sip_message =~ /^9300/) || ($sip_message =~ /^9900/)) {
-            $log->debug("$login ---> $sip_message");
+        if (($command_message =~ /^9300/) || ($command_message =~ /^9900/)) {
+            $log->debug($login . " ---> ". $command_message);
         }
         else {
-            $log->info("$login ---> $sip_message");
+            $log->info($login . " ---> ". $command_message);
         }
 
-        # Receive response
-        $socket->recv( $sip_response, 8192 );
+        $sipsock->recv($respdata, 8192);
 
         $sip_response_recv_time = time();
+
         $response_time = ($sip_response_recv_time - $sip_request_start_time);
 
-        $socket->shutdown(2);
-        $socket->close();
-
-        # Clean up response
-        $sip_response =~ s/\r//g;
-        $sip_response =~ s/\n//g;
-
-        # Log response and check for slow response
-        if ($sip_message =~ /^(9300|9900)/) {
+        if ($command_message =~ /^(9300|9900)/) {
             my $msg_type = $1 eq '9300' ? 'login' : 'ping';
+
             if ($response_time > 1) {
-                $log->warn("$login ---> $sip_message");
-                $log->warn("$login <--- $sip_response");
-                $log->warn("Slow response ($response_time sec) from sip server for $msg_type message: $sip_message");
+                $log->warn($login . " ---> ". $command_message);
+                $log->warn($login . " <--- ". $respdata);
+                $log->warn("Slow response (". $response_time . "sec) from sip server for $msg_type message : ". $command_message);
             }
         }
+
         else {
+
             if ($response_time > 4) {
-                $log->warn("Slow response ($response_time sec) from sip server for command message: $sip_message");
+
+                $log->warn("Slow response (". $response_time . "sec)  from sip server for command message : ". $command_message);
             }
-            $log->info("$login <--- $sip_response");
+            $log->info($login . " <--- ". $respdata);
         }
 
-        $log->debug("Received: $sip_response");
-    } catch {
-        $log->error("SIP server communication error: $_");
-        return $c->render(
-            status => 502,
-            openapi => { error => "SIP server communication error: $_" }
-        );
-    };
+        $sipsock->flush;
 
-    $log->debug("SIP message processed successfully for login: $login");
-    
-    # TODO: Support JSON format in addition to XML
-    # Check Accept header or format parameter to determine response format
-    # For now, default to XML
-    my $xml_response = _build_xml_response($sip_response);
+        $sipsock->shutdown(SHUT_WR);
+        $sipsock->shutdown(SHUT_RDWR);    # we stopped using this socket
+        $sipsock->close;
+        $log->debug("Received: $respdata");
 
-    return _render_response( $c, 200, $xml_response, 'xml' );
-}
-
-=head2 _render_response
-
-Render response in the appropriate format (XML or JSON)
-
-=cut
-
-sub _render_response {
-    my ( $c, $status, $data, $format ) = @_;
-    
-    if ( $format eq 'xml' ) {
-        $c->res->headers->content_type('application/xml; charset=utf-8');
-    } elsif ( $format eq 'json' ) {
-        $c->res->headers->content_type('application/json; charset=utf-8');
+        return $respdata;
     }
-    
-    return $c->render(
-        status => $status,
-        text   => $data
-    );
+
+    $log->error("Login failed for $login. Sip server response: '$respdata'. Expected '941'. Can't process attached SIP message.");
+
+    $sipsock->flush;
+    $sipsock->shutdown(SHUT_WR);
+    $sipsock->shutdown(SHUT_RDWR);    # we stopped using this socket
+    $sipsock->close;
+
+    return $respdata;
 }
 
-=head2 _build_xml_response
+sub handle_99 {
 
-Build XML response from SIP message
+    my ($c, $login, $password, $command_message) = @_;
 
-=cut
+    $log->debug("Handling command message starting with 99: $command_message");
 
-sub _build_xml_response {
-    my ($sip_message) = @_;
+    # Verify the login and password using Koha's authentication method
+    my $auth_result = checkpw_internal($login, $password);
 
-    my $doc  = XML::LibXML::Document->new( '1.0', 'utf-8' );
-    my $root = $doc->createElement('ns1:sip');
+    unless ($auth_result) {
 
-    $root->setAttribute( 'xmlns:ns1' => 'https://koha-suomi.fi/sipschema.xsd' );
-    $root->setAttribute( 'xmlns:xsi' => 'http://www.w3.org/2001/XMLSchema-instance' );
-    $root->setAttribute(
-        'xsi:schemaLocation' => 'https://koha-suomi.fi/sipschema.xsd'
-    );
+        $log->error("Authentication failed on 99 message for user: $login");
 
-    my $response = $doc->createElement('response');
-    $response->appendTextNode($sip_message);
-    $root->appendChild($response);
+        my $response_message = "940";
+        $response_message =~ s/\r//g;
+        $response_message =~ s/\n//g;
 
-    $doc->setDocumentElement($root);
+        try {
+            $c->render(status => 200, text => buildXml($response_message));
+            $log->debug("940 response sent for failed authentication.");
+        } catch {
+            Koha::Exceptions::rethrow_exception($_);
+        }
+        return;
+    }
 
-    return $doc->toString();
+    # Get the authenticated user's branchcode
+    my $borrower = Koha::Patrons->find({ userid => $login });
+
+    unless ($borrower) {
+        $log->error("Could not find borrower account for user: $login");
+    }
+
+    my $branchcode = $borrower->branchcode;
+    $log->debug("User $login authenticated. Branch code: $branchcode");
+
+    # Process the 99 command message here
+    # 98YYYYYN02500520251217    1301592.00AOOUKA|BXYYYYYYYYYYYNYYYY|
+
+    my ($sec, $min, $hour, $mday, $mon, $year) = localtime();
+    my $timestamp = sprintf("%04d%02d%02d    %02d%02d%02d", $year + 1900, $mon + 1, $mday, $hour, $min, $sec);
+    $log->debug("Generated timestamp for response: $timestamp");
+
+    my $response_message = "98YYYYYN" ."025" . "005" . $timestamp . "2.00". "AO" . $branchcode . "|BXYYYYYYYYYYYNYYYY|";
+    $log->debug("Constructed response message for 99 command: $response_message");
+    $response_message =~ s/\r//g;
+    $response_message =~ s/\n//g;
+
+    #check for AY/AZ field and add if found
+    if (length($command_message) >= 9 && substr($command_message, -9, 2) eq 'AY') {
+
+        my $checksum = (-unpack('%16C*', $response_message) & 0xFFFF);
+
+        my $sequence_no = substr($command_message, -7, 1);
+        $response_message .= "AY" . $sequence_no . "AZ";
+
+        $response_message = sprintf("%s%4X", $response_message, $checksum);
+        $log->debug("Response message with sequence number + checksum: $response_message");
+        #remove carriage return/line feed from response
+        $response_message =~ s/\r//g;
+        $response_message =~ s/\n//g;
+    }
+
+    try {
+        $c->render(status => 200, text => buildXml($response_message));
+        $log->debug("XML response passed to endpoint.");
+    } catch {
+        Koha::Exceptions::rethrow_exception($_);
+    }
 }
 
-1;
+sub buildLogin {
+
+    my $login_mes = "9300CN" . shift . "|CO" . shift . "|CPSIP2OHTTP|" . "AY0AZ";
+
+    #from https://fossies.org/linux/koha/C4/SIP/Sip/Checksum.pm
+    my $checksum = (-unpack('%16C*', $login_mes) & 0xFFFF);
+    my $fullpkt = sprintf("%s%4X", $login_mes, $checksum);
+
+    $log->debug("sip message with checksum: $fullpkt");
+
+    return $fullpkt;
+}
+
+sub buildXml {
+
+    my $responsemessage = shift;
+
+	my $doc = XML::LibXML::Document->new('1.0', 'utf-8');
+
+	my $root = $doc->createElement('ns1:sip');
+
+	$root->setAttribute('xsi:schemaLocation'=> 'https://koha-suomi.fi/sipschema.xsd');
+	$root->setAttribute('xmlns:ns1'=> 'https://koha-suomi.fi/sipschema.xsd');
+	$root->setAttribute('xmlns:xsi'=> 'http://www.w3.org/2001/XMLSchema-instance');
+	my %tags = (
+    	response => $responsemessage,
+	);
+
+	for my $name (keys %tags) {
+    	my $tag = $doc->createElement($name);
+    	my $value = $tags{$name};
+    	$tag->appendTextNode($value);
+    	$root->appendChild($tag);
+	}
+
+	$doc->setDocumentElement($root);
+
+	print $doc->toString();
+
+    $doc = decode_utf8($doc);
+
+    return $doc;
+}
+
+sub extractSip {
+
+    my ($xmlmessage, $c) = @_;
+
+    my $parser = XML::LibXML->new();
+    my $xmldoc = $parser->load_xml(string => $xmlmessage);
+    my $xc     = XML::LibXML::XPathContext->new($xmldoc->documentElement());
+
+    my ($node) = $xc->findnodes('//request');
+
+    my $siprequest = $node->textContent;
+
+    #remove carriage return/line feed from request
+    $siprequest =~ s/\r//g;
+    $siprequest =~ s/\n//g;
+
+    return $siprequest;
+}
+
+sub getLogin {
+
+    #Retrieve the self check machine login info from XML
+    my $xmlmessage = shift;
+
+    my ($login, $passw);
+
+    my $parser = XML::LibXML->new();
+    my $doc    = $parser->load_xml(string => $xmlmessage);
+    my $xc     = XML::LibXML::XPathContext->new($doc->documentElement());
+
+    my ($node) = $xc->findnodes('//ns1:sip');
+
+    try {
+        $login = $node->getAttribute("login");
+        $passw = $node->getAttribute("password");
+
+        return $login, $passw;
+    } catch {
+        return 0;
+    }
+}
+
+sub extractServer {
+
+    my ($host, $port);
+
+    my ($xmlmessage, $c)    = @_;
+    my ($term,       $pass) = getLogin($xmlmessage);
+
+    #Handle all sip config XML files under /KOHA_CONF/SIPconfig
+    #foreach my $file (glob("$CONFPATH/SIPconfig/*.xml")) {
+
+    # SIP configuration has been moved to a single file sipconfig.xml under KOHA_CONF -path
+    my $file = "$CONFPATH/sipconfig.xml";
+
+        my $parser = XML::LibXML->new();
+        my $doc    = XML::LibXML->load_xml(location => $file);
+        my $xc     = XML::LibXML::XPathContext->new($doc);
+
+        $xc->registerNs('acs', "http://openncip.org/acs-config/1.0/");
+
+        #get account node with user id that matches received XML message's login id from sip config xml
+        my $xpath = '/acs:acsconfig/acs:accounts/acs:login[@id="' . $term . '"]';
+
+        foreach my $node ($xc->findnodes($xpath)) {
+
+            my $id = $node->getAttribute('id');
+
+            if ($id eq $term) {
+
+                #find sipohttp host and port attributes inside <sipohttp></sipohttp> by service name.
+                #Sipohttp service name is defined in sip account line (sipohttp parameter) and in service name parameter inside <sipohttp></sipohttp>.
+
+                #get attribute 'sipohttp' from matching account line
+                my $service = $node->getAttribute('sipohttp');
+
+                my $xpath = '/acs:acsconfig/acs:sipohttp/acs:service[@name="' . $service . '"]';
+
+                foreach my $node ($xc->findnodes($xpath)) {
+
+
+                    my $servName = $node->getAttribute('name');
+
+                    if ($servName eq $service) {
+
+                        my $host = $node->getAttribute('host');
+                        my $port = $node->getAttribute('port');
+
+                        return $host, $port;
+
+                    }
+
+                }
+
+                $log->error("Can't find SIPoHTTP service parameters $service for $term in sip config XMLs");
+                return 0;
+
+            }
+
+        }
+
+    # }
+
+    $log->error("Missing SIPoHTTP account for $term in sip config XMLs");
+    return 0;
+
+}
+
+sub validateXml {
+
+    #For validating the content of the XML SIP message
+    my ($c, $xmlbody) = @_;
+    my $parser = XML::LibXML->new();
+
+    # parse and validate the xml against sipschema
+    # https://koha-suomi.fi/sipschema.xsd
+    my $schema = XML::LibXML::Schema->new(location => $KOHAPATH . '/koha-tmpl/sipschema.xsd');
+
+    try {
+        my $xmldoc = $parser->load_xml(string => $xmlbody);
+        $schema->validate($xmldoc);
+        $log->debug("XML Validated OK.");
+        return 1;
+    } catch {
+        $log->error("Could not validate XML - @_");
+        return 0;
+    };
+}

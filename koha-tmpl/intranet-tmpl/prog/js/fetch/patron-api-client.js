@@ -17,6 +17,13 @@ export class PatronAPIClient {
                 this.httpClient.get({
                     endpoint: id,
                 }),
+            getAll: (query, params, headers) =>
+                this.httpClient.getAll({
+                    endpoint: "patrons",
+                    query,
+                    params,
+                    headers,
+                }),
         };
     }
     

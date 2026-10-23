@@ -28,6 +28,8 @@ use IO::Socket::INET;
 use Socket qw(:crlf);
 use Try::Tiny;
 use Encode;
+use File::Basename;
+use File::Spec;
 
 =head1 NAME
 
@@ -98,6 +100,10 @@ sub process {
         );
     }
 
+    # TODO: Support JSON input format in addition to XML
+    # Check Content-Type header to determine input format (application/json vs application/xml)
+    # For now, default to XML parsing
+    
     # Parse XML request
     my ( $login, $password, $sip_message );
     try {
@@ -173,42 +179,46 @@ sub process {
     # Load sipconfig.xml and find listener for this institution
     my ($sip_host, $sip_port);
     try {
-        my $config_file = File::Spec->catfile( C4::Context->config('etcdir'), 'sipconfig.xml' );
+        my $config_dir = dirname($ENV{'KOHA_CONF'});
+        $log->debug("Looking for SIPConfig.xml in $config_dir");
+        my $config_file = File::Spec->catfile( $config_dir, 'SIPconfig', 'SIPconfig.xml' );
         unless ( -f $config_file ) {
-            die "sipconfig.xml not found at $config_file";
+            $config_file = File::Spec->catfile( $config_dir, 'sipconfig.xml' );
+            unless ( -f $config_file ) {
+                die "SIPconfig.xml not found at $config_dir/SIPconfig/SIPconfig.xml or $config_dir/sipconfig.xml";
+            }
         }
+
+        $log->debug("Loading SIP config from: $config_file");
 
         my $parser = XML::LibXML->new();
         my $doc = $parser->load_xml( location => $config_file );
         my $xc = XML::LibXML::XPathContext->new( $doc->documentElement() );
 
-        # Register namespace if present
+        # Register namespace from SIPConfig.xml
         $xc->registerNs( 'acs', 'http://openncip.org/acs-config/1.0/' );
 
-        # Find listener for this institution
-        my $institution_name = $institution->name;
-        my $found_listener = 0;
+        # Find the SIP account by login_id and get its sipohttp service reference
+        my $login_node = $xc->findnodes("//acs:accounts/acs:login[\@id='$login']")->[0];
+        die "SIP account '$login' not found in configuration" unless $login_node;
 
-        # Search for service elements that match the institution
-        my @services = $xc->findnodes('//acs:acsconfig/acs:listeners/acs:service');
-        foreach my $service (@services) {
-            my $service_institution = $service->getAttribute('institution');
-            if ( $service_institution && $service_institution eq $institution_name ) {
-                # Extract host and port from service port attribute
-                # Format: host:port/proto or similar
-                my $port_attr = $service->getAttribute('port');
-                if ( $port_attr =~ /^([^:]+):([0-9]+)/ ) {
-                    $sip_host = $1;
-                    $sip_port = $2;
-                    $found_listener = 1;
-                    last;
-                }
-            }
-        }
+        my $sipohttp_service_ref = $login_node->getAttribute('sipohttp');
+        die "SIP account '$login' does not have sipohttp attribute configured" unless $sipohttp_service_ref;
 
-        unless ($found_listener) {
-            die "No listener found for institution '$institution_name' in sipconfig.xml";
-        }
+        $log->debug("SIP account '$login' references sipohttp service: $sipohttp_service_ref");
+
+        # Find the sipohttp service by name
+        my $sipohttp_service = $xc->findnodes("//acs:sipohttp/acs:service[\@name='$sipohttp_service_ref']")->[0];
+        die "SIPoHTTP service '$sipohttp_service_ref' not found in configuration" unless $sipohttp_service;
+
+        $sip_host = $sipohttp_service->getAttribute('host');
+        $sip_port = $sipohttp_service->getAttribute('port');
+
+        die "SIPoHTTP service '$sipohttp_service_ref' missing host attribute" unless $sip_host;
+        die "SIPoHTTP service '$sipohttp_service_ref' missing port attribute" unless $sip_port;
+
+        $log->debug("Found SIPoHTTP service: host=$sip_host, port=$sip_port");
+
     } catch {
         $log->error("Cannot load SIP listener configuration: $_");
         return $c->render(
@@ -288,12 +298,33 @@ sub process {
     };
 
     $log->debug("SIP message processed successfully for login: $login");
+    
+    # TODO: Support JSON format in addition to XML
+    # Check Accept header or format parameter to determine response format
+    # For now, default to XML
     my $xml_response = _build_xml_response($sip_response);
 
-    return $c->render( 
-        status       => 200, 
-        text         => $xml_response,
-        format       => 'xml'
+    return _render_response( $c, 200, $xml_response, 'xml' );
+}
+
+=head2 _render_response
+
+Render response in the appropriate format (XML or JSON)
+
+=cut
+
+sub _render_response {
+    my ( $c, $status, $data, $format ) = @_;
+    
+    if ( $format eq 'xml' ) {
+        $c->res->headers->content_type('application/xml; charset=utf-8');
+    } elsif ( $format eq 'json' ) {
+        $c->res->headers->content_type('application/json; charset=utf-8');
+    }
+    
+    return $c->render(
+        status => $status,
+        text   => $data
     );
 }
 

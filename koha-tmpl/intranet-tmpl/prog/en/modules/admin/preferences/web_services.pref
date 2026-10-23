@@ -36,6 +36,12 @@ Web services:
                   0: "Disable"
             - "the /public namespace of the API."
         -
+            - pref: SIPoHTTPEnabled
+              choices:
+                  1: Enable
+                  0: "Disable"
+            - "the SIPoHTTP REST API endpoint (/api/v1/sipohttp) for forwarding SIP2 messages via HTTP/XML."
+        -
             - Use
             - pref: RESTAPIRenewalBranch
               choices:

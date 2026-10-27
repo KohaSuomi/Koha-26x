@@ -88,14 +88,11 @@ sub process {
         );
     }
 
-    my $body       = $c->req->body;
-    my $xmlrequest = $c->param('query') || $body || '';
+    my $body = $c->req->body || $c->param('query') || '';
 
-    $log->debug("Request received.");
+    $log->debug("Received request XML: " . $body);
 
-    $log->debug("Received request XML: ". $xmlrequest);
-
-    #my $validation = validateXml( $c, $xmlrequest );
+    #my $validation = validateXml( $c, $body );
     my $validation = 1;
 
     if ($validation != 1) {
@@ -106,7 +103,7 @@ sub process {
     }
 
     #process sip here
-    my ($login, $password) = getLogin($xmlrequest);
+    my ($login, $password) = getLogin($body);
 
     if (!$login or !$password) {
 
@@ -116,7 +113,7 @@ sub process {
         return;
     }
 
-    my $sipmes = extractSip($xmlrequest, $c);
+    my $sipmes = extractSip($body, $c);
 
     unless ($sipmes) {
 
@@ -132,7 +129,7 @@ sub process {
         return;
     }
 
-    my ($siphost, $sipport) = extractServer($xmlrequest, $c);
+    my ($siphost, $sipport) = extractServer($body, $c);
 
     unless ($siphost && $sipport) {
 

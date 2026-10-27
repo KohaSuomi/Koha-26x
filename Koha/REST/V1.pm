@@ -72,7 +72,9 @@ sub startup {
             Koha::Cache::Memory::Lite->flush();
 
             # Convert XML payload to JSON and validate against schema
-            if ( $c->req->headers->content_type && $c->req->headers->content_type =~ /application\/xml/ ) {
+            # Skip conversion for sipohttp endpoint which needs raw XML
+            my $path = $c->req->url->path;
+            if ( $c->req->headers->content_type && $c->req->headers->content_type =~ /application\/xml/ && $path !~ /\/sipohttp/ ) {
                 try {
                     my $xml = $c->req->body;
 

@@ -77,8 +77,7 @@ Process a SIP2 message forwarded via HTTP.
 my $log = Log::Log4perl->get_logger('sipohttp');
 
 sub process {
-
-    my $c = shift->openapi->valid_input or return;
+    my $c = shift;
 
     # Check if SIPoHTTP is enabled
     unless ( C4::Context->preference('SIPoHTTPEnabled') ) {

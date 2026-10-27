@@ -96,7 +96,9 @@
           properties:
             error:
               type: string
-              example: "Bad request"
+              enum:
+                - "Invalid XML: Missing login attribute"
+                - "SIP account does not have an associated institution"
       401:
         description: Authentication failed
         schema:
@@ -116,10 +118,13 @@
                 - "SIPoHTTP endpoint is not enabled"
                 - "SIP account not found"
       502:
-        description: Bad gateway (SIP server communication error)
+        description: Bad gateway (SIP listener configuration or server communication error)
         schema:
           type: object
           properties:
             error:
               type: string
-              example: "SIP server communication error"
+              enum:
+                - "Cannot load SIP listener configuration: sipconfig.xml not found"
+                - "Cannot load SIP listener configuration: No SIPoHTTP listener found for institution"
+                - "SIP server communication error: Cannot connect to SIP server"

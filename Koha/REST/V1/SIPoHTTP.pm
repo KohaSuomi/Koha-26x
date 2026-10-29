@@ -428,7 +428,7 @@ sub extractServer {
 
     my ($xmlmessage, $c)    = @_;
     my ($term,       $pass) = getLogin($xmlmessage);
-    my $CONFPATH = dirname(C4::Context->config('kohaconf'));
+    my $CONFPATH = dirname($ENV{'KOHA_CONF'});
 
     #Handle all sip config XML files under /KOHA_CONF/SIPconfig
     #foreach my $file (glob("$CONFPATH/SIPconfig/*.xml")) {

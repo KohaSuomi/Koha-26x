@@ -428,10 +428,29 @@ sub extractServer {
 
     my ($xmlmessage, $c)    = @_;
     my ($term,       $pass) = getLogin($xmlmessage);
-    my $CONFPATH = dirname($ENV{'KOHA_CONF'});
 
-    #Handle all sip config XML files under /KOHA_CONF/SIPconfig
-    #foreach my $file (glob("$CONFPATH/SIPconfig/*.xml")) {
+    # Verify SIP account exists in database like community Koha does
+    my $sip_account = Koha::SIP2::Accounts->new()->search({ login_id => $term })->next;
+
+    unless ($sip_account) {
+        $log->error("SIP account not found in database for login: $term");
+        return 0;
+    }
+
+    $log->debug("SIP account found in database: $term");
+
+    # Get the institution for this account
+    my $institution = $sip_account->institution;
+
+    unless ($institution) {
+        $log->error("Could not find institution for SIP account: $term");
+        return 0;
+    }
+
+    $log->debug("Institution found for SIP account: " . $institution->name);
+
+    # Now get the SIP server host/port from XML config using institution
+    my $CONFPATH = dirname($ENV{'KOHA_CONF'});
 
     # SIP configuration has been moved to a single file sipconfig.xml under KOHA_CONF -path
     # Try SIPConfig.xml first, fall back to sipconfig.xml
@@ -440,55 +459,49 @@ sub extractServer {
         $file = "$CONFPATH/sipconfig.xml";
     }
 
-        my $parser = XML::LibXML->new();
-        my $doc    = XML::LibXML->load_xml(location => $file);
-        my $xc     = XML::LibXML::XPathContext->new($doc);
+    my $parser = XML::LibXML->new();
+    my $doc    = XML::LibXML->load_xml(location => $file);
+    my $xc     = XML::LibXML::XPathContext->new($doc);
 
-        $xc->registerNs('acs', "http://openncip.org/acs-config/1.0/");
+    $xc->registerNs('acs', "http://openncip.org/acs-config/1.0/");
 
-        #get account node with user id that matches received XML message's login id from sip config xml
-        my $xpath = '/acs:acsconfig/acs:accounts/acs:login[@id="' . $term . '"]';
+    # Get account node from XML
+    my $xpath = '/acs:acsconfig/acs:accounts/acs:login[@id="' . $term . '"]';
 
-        foreach my $node ($xc->findnodes($xpath)) {
+    foreach my $node ($xc->findnodes($xpath)) {
 
-            my $id = $node->getAttribute('id');
+        my $id = $node->getAttribute('id');
 
-            if ($id eq $term) {
+        if ($id eq $term) {
 
-                #find sipohttp host and port attributes inside <sipohttp></sipohttp> by service name.
-                #Sipohttp service name is defined in sip account line (sipohttp parameter) and in service name parameter inside <sipohttp></sipohttp>.
+            # Get sipohttp service name from account
+            my $service = $node->getAttribute('sipohttp');
 
-                #get attribute 'sipohttp' from matching account line
-                my $service = $node->getAttribute('sipohttp');
+            my $xpath = '/acs:acsconfig/acs:sipohttp/acs:service[@name="' . $service . '"]';
 
-                my $xpath = '/acs:acsconfig/acs:sipohttp/acs:service[@name="' . $service . '"]';
+            foreach my $node ($xc->findnodes($xpath)) {
 
-                foreach my $node ($xc->findnodes($xpath)) {
+                my $servName = $node->getAttribute('name');
 
+                if ($servName eq $service) {
 
-                    my $servName = $node->getAttribute('name');
+                    my $host = $node->getAttribute('host');
+                    my $port = $node->getAttribute('port');
 
-                    if ($servName eq $service) {
-
-                        my $host = $node->getAttribute('host');
-                        my $port = $node->getAttribute('port');
-
-                        return $host, $port;
-
-                    }
+                    return $host, $port;
 
                 }
 
-                $log->error("Can't find SIPoHTTP service parameters $service for $term in sip config XMLs");
-                return 0;
-
             }
+
+            $log->error("Can't find SIPoHTTP service parameters $service for $term in sip config XMLs");
+            return 0;
 
         }
 
-    # }
+    }
 
-    $log->error("Missing SIPoHTTP account for $term in sip config XMLs");
+    $log->error("SIP account found in database but not in XML config for: $term");
     return 0;
 
 }

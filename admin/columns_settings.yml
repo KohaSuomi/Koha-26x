@@ -1849,6 +1849,8 @@ modules:
             -
               columnname: location
             -
+              columnname: sublocation
+            -
               columnname: homebranch
             -
               columnname: checkout_on_unformatted

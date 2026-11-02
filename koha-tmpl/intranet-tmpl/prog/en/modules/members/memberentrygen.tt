@@ -960,6 +960,7 @@
                                                                 data-pwd-length="[% category.effective_min_password_length | html %]"
                                                                 data-pwd-strong="[% category.effective_require_strong_password | html %]"
                                                                 data-typename="[% category_type | html %]"
+                                                                data-can-have-permissions="[% category.can_have_permissions | html %]"
                                                                 data-expiry-date="[% category.get_expiry_date | html %]"
                                                                 >[% category.description | html %]</option
                                                             >
@@ -969,6 +970,7 @@
                                                                 data-pwd-length="[% category.effective_min_password_length | html %]"
                                                                 data-pwd-strong="[% category.effective_require_strong_password | html %]"
                                                                 data-typename="[% category_type | html %]"
+                                                                data-can-have-permissions="[% category.can_have_permissions | html %]"
                                                                 data-expiry-date="[% category.get_expiry_date | html %]"
                                                                 >[% category.description | html %]</option
                                                             >
@@ -1617,6 +1619,9 @@
                     <input type="checkbox" id="categoryChangeUpdateExpiry" />
                     <label class="form-check-label" for="categoryChangeUpdateExpiry"> Reset expiration date to category default </label>
                 </div>
+                [% IF Koha.Preference('ClearPermissionsAutomatically') %]
+                    <div id="permissionsChangeWarning" class="alert alert-warning" style="display:none;"> Attention! You are changing the patron category to one that cannot have permissions. Permissions will be removed upon saving. </div>
+                [% END %]
             </div>
             <div class="modal-footer">
                 <button id="categoryChangeConfirmBtn" class="btn btn-primary"><i class="fa fa-check" aria-hidden="true"></i> Confirm</button>
@@ -1921,6 +1926,7 @@
 
         var TalkingTechItivaPhoneNotification = [% Koha.Preference('TalkingTechItivaPhoneNotification') || 0 | html %];
         var PhoneNotification = [% Koha.Preference('PhoneNotification') || 0 | html %];
+        var ClearPermissionsAutomatically =  "[% Koha.Preference('ClearPermissionsAutomatically') | html %]";
     </script>
     [% Asset.js("js/messaging-preference-form.js") | $raw %]
     [% Asset.js("js/members.js") | $raw %]

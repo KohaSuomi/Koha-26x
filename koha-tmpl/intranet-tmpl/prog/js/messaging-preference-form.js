@@ -8,10 +8,24 @@ $(document).ready(function () {
         message_prefs_dirty = true;
     }
 
+    var originalCanHavePermissions = $(
+        "#categorycode_entry option:selected"
+    ).data("canHavePermissions");
+
     $("#categorycode_entry").change(function () {
         var categorycode = $(this).val();
         // if we change category, consider the messaging prefs dirty
         message_prefs_dirty = true;
+
+        var currentCanHavePermissions = $(this)
+            .find("option:selected")
+            .data("canHavePermissions");
+        var permissionsWarning =
+            ClearPermissionsAutomatically === "1" &&
+            originalCanHavePermissions == "1" &&
+            currentCanHavePermissions != "1";
+        $("#permissionsChangeWarning").toggle(permissionsWarning);
+
         // Show the combined modal and reset checkboxes to checked
         $("#categoryChangeUpdateMessaging").prop("checked", true);
         $("#categoryChangeUpdateExpiry").prop("checked", true);

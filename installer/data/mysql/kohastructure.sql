@@ -1834,6 +1834,7 @@ CREATE TABLE `categories` (
   `self_renewal_if_expired` smallint(6) DEFAULT 0 COMMENT 'how long after expiry a patron can self renew their account',
   `self_renewal_failure_message` mediumtext DEFAULT NULL COMMENT 'the message to display if self renewal is not successful',
   `self_renewal_information_message` mediumtext DEFAULT NULL COMMENT 'the message to display before the self renewal process starts',
+  `can_have_permissions` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'if patrons of this category can have permissions',
   PRIMARY KEY (`categorycode`),
   UNIQUE KEY `categorycode` (`categorycode`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

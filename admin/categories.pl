@@ -93,6 +93,7 @@ if ( $op eq 'add_form' ) {
     my @branches                               = grep { $_ ne q{} } $input->multi_param('branches');
     my $can_be_guarantee                       = $input->param('can_be_guarantee');
     my $force_password_reset_when_set_by_staff = $input->param('force_password_reset_when_set_by_staff');
+    my $can_have_permissions                   = $input->param('can_have_permissions');
 
     $reset_password                         = undef if $reset_password eq -1;
     $change_password                        = undef if $change_password eq -1;
@@ -136,6 +137,7 @@ if ( $op eq 'add_form' ) {
         $category->self_renewal_failure_message($self_renewal_failure_message);
         $category->self_renewal_information_message( parse_renewal_info_message( \@self_renewal_information_message ) );
         $category->self_renewal_if_expired($self_renewal_if_expired);
+        $category->can_have_permissions($can_have_permissions);
         eval {
             $category->store;
             $category->replace_library_limits( \@branches );
@@ -180,6 +182,7 @@ if ( $op eq 'add_form' ) {
                 self_renewal_failure_message           => $self_renewal_failure_message,
                 self_renewal_information_message => parse_renewal_info_message( \@self_renewal_information_message ),
                 self_renewal_if_expired          => $self_renewal_if_expired,
+                can_have_permissions                   => $can_have_permissions,
             }
         );
         eval {

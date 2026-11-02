@@ -661,6 +661,10 @@ if ( ( !$nok ) and $nodouble and ( $op eq 'cud-insert' or $op eq 'cud-save' ) ) 
                     $template
                 );
             }
+
+            if ( C4::Context->preference('ClearPermissionsAutomatically') && !$category->can_have_permissions ) {
+                $patron->set_permissions( {} );
+            }
         }
     }
 

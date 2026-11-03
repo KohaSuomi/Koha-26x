@@ -364,7 +364,7 @@ $(document).ready(function () {
                                     branchSelect += "</select>";
                                     return branchSelect;
                                 } else {
-                                    return oObj.branchcode.escapeHtml() || "";
+                                    return oObj.branchcode.escapeHtml()+(oObj.hold_pickup_shelf_name ? "<br/> on pickup shelf " + oObj.hold_pickup_shelf_name.escapeHtml() : "") || "";
                                 }
                             },
                         },
@@ -1333,15 +1333,9 @@ async function load_patron_holds_table(biblio_id, split_data) {
                 infoFiltered: "",
             },
             ajax: {
-                url: url,
+                url: url
             },
-            embed: [
-                "patron",
-                "item",
-                "item_group",
-                "item_level_holds_count",
-                "iso18626_request",
-            ],
+            embed: ["patron", "item", "item_group", "item_level_holds_count", "hold_pickup_shelf"],
             columnDefs: [
                 {
                     targets: [2, 3],
@@ -1385,9 +1379,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                     searchable: false,
                     render: function (data, type, row, meta) {
                         let select =
-                            '<select name="rank-request" class="rank-request ' +
-                            table_class +
-                            '" data-id="' +
+                            '<select name="rank-request" class="rank-request ' + table_class + '" data-id="' +
                             row.hold_id;
                         if (
                             CAN_user_reserveforothers_modify_holds_priority &&
@@ -1494,41 +1486,25 @@ async function load_patron_holds_table(biblio_id, split_data) {
                             return null;
                         }
                         let buttons =
-                            '<a class="hold-arrow move-hold ' +
-                            table_class +
-                            '" title="' +
-                            __("Move hold up") +
-                            '" href="#" data-move-hold="up" data-priority="' +
+                            '<a class="hold-arrow move-hold ' + table_class + '" title="Move hold up" href="#" data-move-hold="up" data-priority="' +
                             row.priority +
                             '" reserve_id="' +
                             row.hold_id +
                             '"><i class="fa fa-lg icon-move-hold-up" aria-hidden="true"></i></a>';
                         buttons +=
-                            '<a class="hold-arrow move-hold ' +
-                            table_class +
-                            '" title="' +
-                            __("Move hold to top") +
-                            '" href="#" data-move-hold="top" data-priority="' +
+                            '<a class="hold-arrow move-hold ' + table_class + '" title="Move hold to top" href="#" data-move-hold="top" data-priority="' +
                             row.priority +
                             '" reserve_id="' +
                             row.hold_id +
                             '"><i class="fa fa-lg icon-move-hold-top" aria-hidden="true"></i></a>';
                         buttons +=
-                            '<a class="hold-arrow move-hold ' +
-                            table_class +
-                            '" title="' +
-                            __("Move hold to bottom") +
-                            '" href="#" data-move-hold="bottom" data-priority="' +
+                            '<a class="hold-arrow move-hold ' + table_class + '" title="Move hold to bottom" href="#" data-move-hold="bottom" data-priority="' +
                             row.priority +
                             '" reserve_id="' +
                             row.hold_id +
                             '"><i class="fa fa-lg icon-move-hold-bottom" aria-hidden="true"></i></a>';
                         buttons +=
-                            '<a class="hold-arrow move-hold ' +
-                            table_class +
-                            '" title="' +
-                            __("Move hold down") +
-                            '" href="#" data-move-hold="down" data-priority="' +
+                            '<a class="hold-arrow move-hold ' + table_class + '" title="Move hold down" href="#" data-move-hold="down" data-priority="' +
                             row.priority +
                             '" reserve_id="' +
                             row.hold_id +
@@ -1573,9 +1549,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                     render: function (data, type, row, meta) {
                         if (AllowHoldDateInFuture) {
                             return (
-                                '<input type="text" class="holddate ' +
-                                table_class +
-                                '" value="' +
+                                '<input type="text" class="holddate ' + table_class + '" value="' +
                                 $date(data, { dateformat: "rfc3339" }) +
                                 '" size="10" name="hold_date" data-id="' +
                                 row.hold_id +
@@ -1594,9 +1568,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                     searchable: false,
                     render: function (data, type, row, meta) {
                         return (
-                            '<input type="text" class="expirationdate ' +
-                            table_class +
-                            '" value="' +
+                            '<input type="text" class="expirationdate ' + table_class + '" value="' +
                             $date(data, { dateformat: "rfc3339" }) +
                             '" size="10" name="expiration_date" data-id="' +
                             row.hold_id +
@@ -1615,9 +1587,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                         var branchSelect =
                             "<select priority=" +
                             row.priority +
-                            ' class="hold_location_select ' +
-                            table_class +
-                            '" data-id="' +
+                            ' class="hold_location_select ' + table_class + '" data-id="' +
                             row.hold_id +
                             '" reserve_id="' +
                             row.hold_id +
@@ -1656,9 +1626,12 @@ async function load_patron_holds_table(biblio_id, split_data) {
                                 "Item being processed at <strong>%s</strong>"
                             ).format(libraryname);
                         } else if (row.status == "W") {
-                            return __(
-                                "Item waiting at <strong>%s</strong> since %s"
-                            ).format(libraryname, $date(row.waiting_date));
+                            let response = __("Item waiting at <strong>%s</strong>").format(libraryname);
+                            if (row.hold_pickup_shelf) {
+                                response += __(", on the pickup shelf <strong>%s</strong>").format(row.hold_pickup_shelf.shelf_name.escapeHtml());
+                            }
+                            response += __(" since %s").format($date(row.waiting_date));
+                            return response;
                         } else {
                             return branchSelect;
                         }
@@ -1688,7 +1661,50 @@ async function load_patron_holds_table(biblio_id, split_data) {
 
                         // Handle status cases
                         if (row.status) {
-                            return `<a href="/cgi-bin/koha/catalogue/moredetail.pl?biblionumber=${row.biblio_id}&itemnumber=${row.item_id}">${row.item.external_id}</a>${non_priority_label}${extras}`;
+                            return (
+                                '<a href="/cgi-bin/koha/catalogue/moredetail.pl?biblionumber=' +
+                                row.biblio_id +
+                                "&itemnumber=" +
+                                row.item_id +
+                                '">' +
+                                row.item.external_id +
+                                "</a>"
+                            );
+                        } else if (row.item_id && row.item_level) {
+                            let barcode = row.item.external_id ? row.item.external_id : __("No barcode");
+                            if (row.item_level_holds >= 2) {
+                                let link =
+                                    '<a href="/cgi-bin/koha/catalogue/moredetail.pl?biblionumber=' +
+                                    row.biblio_id +
+                                    "&itemnumber=" +
+                                    row.item_id +
+                                    '">' +
+                                    (row.item.external_id
+                                        ? row.item.external_id.escapeHtml()
+                                        : __("No barcode")) +
+                                    "</a>";
+                                return __("Only item") + ' ' + link;
+                            } else {
+                                let select = '<select id="change_hold_type" class="change_hold_type ' + table_class + '" data-id="' + row.hold_id + '">';
+                                select += '<option value="" selected>' + __("Only item") + ' ' + barcode + '</option>';
+                                select += '<option value="">' + __("Next available") + '</option>';
+                                select += '</select>';
+                                return select;
+                            }
+                        } else if (row.item_group_id) {
+                            return __(
+                                "Next available item from group <strong>%s</strong>"
+                            ).format(row.item_group.description);
+                        } else {
+                            if (row.non_priority) {
+                                return (
+                                    "<em>" + __("Next available") + "</em><br/><i>" +
+                                    __("Non priority hold") +
+                                    "</i>"
+                                );
+                            } else {
+                                return "<em>" + __("Next available") + "</em>";
+                            }
                         }
 
                         // Handle item level holds
@@ -1736,9 +1752,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                         } else {
                             if (row.lowest_priority) {
                                 return (
-                                    '<a class="hold-arrow toggle-lowest-priority ' +
-                                    table_class +
-                                    '" title="Remove lowest priority" href="#" data-op="cud-setLowestPriority" data-borrowernumber="' +
+                                    '<a class="hold-arrow toggle-lowest-priority ' + table_class + '" title="Remove lowest priority" href="#" data-op="cud-setLowestPriority" data-borrowernumber="' +
                                     row.patron_id +
                                     '" data-biblionumber="' +
                                     biblio_id +
@@ -1750,9 +1764,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                                 );
                             } else {
                                 return (
-                                    '<a class="hold-arrow toggle-lowest-priority ' +
-                                    table_class +
-                                    '" title="Set lowest priority" href="#" data-op="cud-setLowestPriority" data-borrowernumber="' +
+                                    '<a class="hold-arrow toggle-lowest-priority ' + table_class + '" title="Set lowest priority" href="#" data-op="cud-setLowestPriority" data-borrowernumber="' +
                                     row.patron_id +
                                     '" data-biblionumber="' +
                                     biblio_id +
@@ -1772,9 +1784,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                     searchable: false,
                     render: function (data, type, row, meta) {
                         return (
-                            '<a class="cancel-hold deny ' +
-                            table_class +
-                            '" title="Cancel hold" data-id="' +
+                            '<a class="cancel-hold ' + table_class + '" title="Cancel hold" reserve_id="' +
                             data +
                             '" data-biblionumber="' +
                             biblio_id +
@@ -1817,9 +1827,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                             let td = "";
                             if (SuspendHoldsIntranet) {
                                 td +=
-                                    '<button class="btn btn-default btn-xs toggle-suspend ' +
-                                    table_class +
-                                    '" data-id="' +
+                                    '<button class="btn btn-default btn-xs toggle-suspend ' + table_class + '" data-id="' +
                                     data +
                                     '" data-biblionumber="' +
                                     biblio_id +
@@ -1862,9 +1870,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                                         $date(row.suspended_until, {
                                             dateformat: "rfc3339",
                                         }) +
-                                        '" class="suspenddate ' +
-                                        table_class +
-                                        '" data-flatpickr-futuredate="true" data-suspend-date="' +
+                                        '" class="suspenddate ' + table_class + '" data-flatpickr-futuredate="true" data-suspend-date="' +
                                         row.suspended_until +
                                         '" />';
                                 }
@@ -1882,9 +1888,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                     render: function (data, type, row, meta) {
                         if (row.status == "W" || row.status == "T") {
                             return (
-                                '<a class="btn btn-default btn-xs printholdslip ' +
-                                table_class +
-                                '" data-reserve_id="' +
+                                '<a class="btn btn-default btn-xs printholdslip ' + table_class + '" data-reserve_id="' +
                                 data +
                                 '">' +
                                 __("Print slip") +
@@ -1899,9 +1903,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
         },
         hold_table_settings
     );
-
-    // Clear selectedHolds on page load
-    localStorage.removeItem("selectedHolds");
+    holdsQueueTable.api().page(0).draw(false);
     $(table_id).on("draw.dt", function () {
         function updateMSGCounters() {
             var MSG_CANCEL_SELECTED = __("Cancel selected (%s)");
@@ -2101,53 +2103,73 @@ async function load_patron_holds_table(biblio_id, split_data) {
         // Attach the handler to the button
         $("#cancelModalConfirmBtn").one("click", function (e) {
             e.preventDefault();
-            let formInputs = {};
-            formInputs["reserve_id"] = $(
-                "#cancel_modal_form :input[name='reserve_id']"
-            )
-                .map(function () {
-                    return $(this).val();
-                })
-                .get();
-            formInputs["cancellation-reason"] = $(
-                "#cancel_modal_form :input[name='cancellation-reason']"
-            ).val();
-            cancel_holds(
-                formInputs["reserve_id"],
-                formInputs["cancellation-reason"]
-            )
-                .success(function () {
-                    holdsQueueTable.api().ajax.reload(null, false);
-                })
-                .fail(function (jqXHR) {
-                    $("#cancelModal .modal-body").prepend(
-                        '<div class="alert alert-danger">' +
-                            jqXHR.responseJSON.error +
-                            "</div>"
-                    );
-                    $("#cancelModalConfirmBtn").prop("disabled", true);
-                })
-                .done(function () {
-                    $("#cancelModal").modal("hide");
-                    if ($(".select_hold_all").prop("checked")) {
-                        $(".select_hold_all").click();
-                    }
-                });
+            let hold_ids;
+            const hold_id = $("#cancelModal")
+                .modal("show")
+                .find("#cancelModalConfirmBtn")
+                .attr("data-id");
+            let reason = $("#modal-cancellation-reason").val();
+            if (hold_id) {
+                hold_ids = [parseInt(hold_id)];
+            } else {
+                hold_ids = JSON.parse(localStorage.selectedHolds);
+            }
+            $("#cancelModal")
+                .find(".modal-footer #cancelModalConfirmBtn")
+                .before(
+                    '<img src="/intranet-tmpl/prog/img/spinner-small.gif" alt="" style="padding-right: 10px;"/>'
+                );
+            deleteHolds(hold_ids, reason);
+            $("#cancelModal")
+                .modal("show")
+                .find("#cancelModalConfirmBtn")
+                .attr("data-id", "");
         });
-        function cancel_holds(hold_ids, cancellation_reason) {
-            return $.ajax({
+        async function deleteHolds(hold_ids, reason) {
+            $.ajax({
                 method: "DELETE",
                 url: "/api/v1/holds/cancellation_bulk",
                 contentType: "application/json",
                 data: JSON.stringify({
                     hold_ids: hold_ids,
-                    cancellation_reason: cancellation_reason,
+                    cancellation_reason: reason,
                 }),
+                success: function () {
+                    setTimeout(() => {
+                        $("#cancelModal").modal("hide");
+                        $("#cancelModal")
+                            .find(".modal-footer #cancelModalConfirmBtn")
+                            .prev("img")
+                            .remove();
+                        $("#cancelModal")
+                            .find(".modal-body")
+                            .find(".hold-cancelled")
+                            .remove();
+                        delete localStorage.selectedHolds;
+                        $(".cancel_selected_holds").html(MSG_CANCEL_SELECTED.format(0));
+                    }, 500);
+                    holdsQueueTable.api().ajax.reload(null, false);
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    alert(
+                        "There was an error:" + textStatus + " " + errorThrown
+                    );
+                }
             });
+
         }
-        $(
-            ".holddate." + table_class + ", .expirationdate." + table_class
-        ).flatpickr({
+        async function deleteHold(hold_id, reason) {
+            try {
+                await $.ajax({
+                    method: "DELETE",
+                    url: "/api/v1/holds/" + encodeURIComponent(hold_id),
+                    data: JSON.stringify(reason),
+                });
+            } catch (error) {
+                console.error("Error when deleting hold: " + hold_id);
+            }
+        }
+        $(".holddate." + table_class + ", .expirationdate." + table_class).flatpickr({
             onReady: function (selectedDates, dateStr, instance) {
                 $(instance.altInput)
                     .wrap("<span class='flatpickr_wrapper'></span>")
@@ -2245,9 +2267,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
             e.preventDefault();
             const hold_id = $(this).data("id");
             const suspended = $(this).attr("data-suspended");
-            const input = $(
-                `.suspenddate.` + table_class + `[data-id="${hold_id}"]`
-            );
+            const input = $(`.suspenddate.` + table_class + `[data-id="${hold_id}"]`);
             const method = suspended == "true" ? "DELETE" : "POST";
             let end_date = input.val() && method == "POST" ? input.val() : null;
             let params =

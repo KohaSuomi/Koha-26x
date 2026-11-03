@@ -208,10 +208,12 @@
         var holdst_table_settings  = [% TablesSettings.GetTableSettings( 'circ', 'holds_awaiting_pickup', 'holdst',  'json' ) | $raw %];
         var holdso_table_settings  = [% TablesSettings.GetTableSettings( 'circ', 'holds_awaiting_pickup', 'holdso',  'json' ) | $raw %];
         var holdscr_table_settings = [% TablesSettings.GetTableSettings( 'circ', 'holds_awaiting_pickup', 'holdscr', 'json' ) | $raw %];
-    </script>
-    <script nonce="[% Koha.CSPNonce | $raw %]">
-        var MSG_CANCEL_SELECTED = _("Cancel selected (%s)");
-        $(document).ready(function () {
+
+        [% IF !Koha.Preference('HoldPickupShelves')%]
+            holdst_table_settings['columns'].splice(9, 1);
+        [% END %]
+
+        $(document).ready(function() {
             $("#holdst").kohaTable(
                 {
                     pagingType: "full",

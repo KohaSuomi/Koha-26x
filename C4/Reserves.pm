@@ -1287,7 +1287,7 @@ This function also removes any entry of the hold in holds queue table.
 =cut
 
 sub ModReserveAffect {
-    my ( $itemnumber, $borrowernumber, $transferToDo, $reserve_id, $desk_id, $notify_library ) = @_;
+    my ( $itemnumber, $borrowernumber, $transferToDo, $reserve_id, $desk_id, $notify_library, $hold_pickup_shelf_id ) = @_;
     my $dbh = C4::Context->dbh;
 
     # we want to attach $itemnumber to $borrowernumber, find the biblionumber
@@ -1331,6 +1331,11 @@ sub ModReserveAffect {
         $hold->set_processing();
     } else {
         $hold->set_waiting($desk_id);
+        if ($hold_pickup_shelf_id) {
+            $hold->set( { hold_pickup_shelf_id => $hold_pickup_shelf_id } )->store;
+            my $hold_pickup_shelf = Koha::HoldPickupShelves->find($hold_pickup_shelf_id);
+            $hold_pickup_shelf->lock_full_shelf;
+        }
         _koha_notify_reserve( $hold->reserve_id ) unless $already_on_shelf;
 
         # Complete transfer if one exists
@@ -1848,8 +1853,8 @@ sub _Findgroupreserve {
                reserves.reserve_id          AS reserve_id,
                reserves.itemtype            AS itemtype,
                reserves.non_priority        AS non_priority,
-               reserves.item_group_id       AS item_group_id,
-               reserves.hold_group_id       AS hold_group_id
+               reserves.item_group_id           AS item_group_id,
+               reserves.hold_pickup_shelf_id AS hold_pickup_shelf_id
         FROM reserves
         JOIN biblioitems USING (biblionumber)
         JOIN hold_fill_targets USING (reserve_id)
@@ -1886,7 +1891,7 @@ sub _Findgroupreserve {
                reserves.itemtype                   AS itemtype,
                reserves.non_priority               AS non_priority,
                reserves.item_group_id              AS item_group_id,
-               reserves.hold_group_id              AS hold_group_id
+               reserves.hold_pickup_shelf_id       AS hold_pickup_shelf_id
         FROM reserves
         WHERE reserves.biblionumber = ?
           AND (reserves.itemnumber IS NULL OR reserves.itemnumber = ?)
@@ -1954,11 +1959,13 @@ sub _koha_notify_reserve {
     my $library             = Koha::Libraries->find( $hold->branchcode );
     my $from_email_address  = $library->from_email_address;
     my $reply_email_address = $library->inbound_email_address;
+    my $shelf_name = $hold->hold_pickup_shelf ? $hold->hold_pickup_shelf->shelf_name : undef;
 
     my %letter_params = (
         module     => 'reserves',
         branchcode => $hold->branchcode,
         lang       => $patron->lang,
+        substitute => { hold_pickup_shelf => $shelf_name },
         tables     => {
             'branches'    => $library->unblessed,
             'borrowers'   => $patron->unblessed,
@@ -2036,12 +2043,13 @@ sub _koha_notify_hold_changed {
 
     my $patron  = $hold->patron;
     my $library = $hold->branch;
+    my $shelf_name = $hold->hold_pickup_shelf ? $hold->hold_pickup_shelf->shelf_name : undef;
 
     my $letter = C4::Letters::GetPreparedLetter(
         module      => 'reserves',
         letter_code => 'HOLD_CHANGED',
         branchcode  => $hold->branchcode,
-        substitute  => { today => output_pref(dt_from_string) },
+        substitute  => { today => output_pref(dt_from_string), hold_pickup_shelf => $shelf_name },
         tables      => {
             'branches'    => $library->unblessed,
             'borrowers'   => $patron->unblessed,
@@ -2288,12 +2296,17 @@ sub ReserveSlip {
     my $patron  = $hold->borrower;
     my $reserve = $hold->unblessed;
 
-    return C4::Letters::GetPreparedLetter(
-        module      => 'circulation',
+    my $shelf_name = $hold->hold_pickup_shelf ? $hold->hold_pickup_shelf->shelf_name : undef;
+
+    return  C4::Letters::GetPreparedLetter (
+        module => 'circulation',
         letter_code => 'HOLD_SLIP',
-        branchcode  => $branchcode,
-        lang        => $patron->lang,
-        tables      => {
+        branchcode => $branchcode,
+        lang => $patron->lang,
+        substitute => {
+            hold_pickup_shelf => $shelf_name,
+        },
+        tables => {
             'reserves'    => $reserve,
             'branches'    => $reserve->{branchcode},
             'borrowers'   => $reserve->{borrowernumber},

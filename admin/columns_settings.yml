@@ -2050,6 +2050,8 @@ modules:
             -
               columnname: location
             -
+              columnname: pickup_shelf
+            -
               columnname: itemcallnumber
             -
               columnname: dateaccessioned
@@ -2262,6 +2264,8 @@ modules:
               columnname: current_location
             -
               columnname: shelving_location
+            -
+              columnname: pickup_shelf
             -
               columnname: call_number
             -

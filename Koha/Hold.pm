@@ -36,7 +36,7 @@ use Koha::Items;
 use Koha::Libraries;
 use Koha::Calendar;
 use Koha::Plugins;
-use Koha::ILL::ISO18626::Request;
+use Koha::HoldPickupShelf;
 
 use Koha::BackgroundJob::BatchUpdateBiblioHoldsQueue;
 
@@ -816,6 +816,19 @@ sub desk {
     my $desk_rs = $self->_result->desk;
     return unless $desk_rs;
     return Koha::Desk->_new_from_dbic($desk_rs);
+}
+
+=head3 hold_pickup_shelf
+
+Returns the related Koha::HoldPickupShelf object for this Hold
+
+=cut
+
+sub hold_pickup_shelf {
+    my $self = shift;
+    my $rs   = $self->_result->hold_pickup_shelf;
+    return unless $rs;
+    return Koha::HoldPickupShelf->_new_from_dbic($rs);
 }
 
 =head3 borrower

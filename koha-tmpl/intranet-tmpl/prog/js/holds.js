@@ -364,7 +364,7 @@ $(document).ready(function () {
                                     branchSelect += "</select>";
                                     return branchSelect;
                                 } else {
-                                    return oObj.branchcode.escapeHtml() || "";
+                                    return oObj.branchcode.escapeHtml()+(oObj.hold_pickup_shelf_name ? "<br/> on pickup shelf " + oObj.hold_pickup_shelf_name.escapeHtml() : "") || "";
                                 }
                             },
                         },
@@ -1341,6 +1341,7 @@ async function load_patron_holds_table(biblio_id, split_data) {
                 "item_group",
                 "item_level_holds_count",
                 "iso18626_request",
+                "hold_pickup_shelf",
             ],
             columnDefs: [
                 {
@@ -1656,9 +1657,12 @@ async function load_patron_holds_table(biblio_id, split_data) {
                                 "Item being processed at <strong>%s</strong>"
                             ).format(libraryname);
                         } else if (row.status == "W") {
-                            return __(
-                                "Item waiting at <strong>%s</strong> since %s"
-                            ).format(libraryname, $date(row.waiting_date));
+                            let response = __("Item waiting at <strong>%s</strong>").format(libraryname);
+                            if (row.hold_pickup_shelf) {
+                                response += __(", on the pickup shelf <strong>%s</strong>").format(row.hold_pickup_shelf.shelf_name.escapeHtml());
+                            }
+                            response += __(" since %s").format($date(row.waiting_date));
+                            return response;
                         } else {
                             return branchSelect;
                         }

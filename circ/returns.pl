@@ -54,6 +54,7 @@ use Koha::Item::Transfers;
 use Koha::Items;
 use Koha::Patrons;
 use Koha::Recalls;
+use Koha::HoldPickupShelves;
 
 my $query = CGI->new;
 
@@ -123,6 +124,7 @@ if ( $query->param('reserve_id') && $op eq 'cud-affect_reserve' ) {
     my $diffBranchReturned = $query->param('diffBranch');
     my $cancel_reserve     = $query->param('cancel_reserve');
     my $cancel_reason      = $query->param('cancel_reason');
+    my $hold_pickup_shelf_id = $query->param('hold_pickup_shelf_id');
 
     # fix up item type for display
     my $item   = Koha::Items->find($itemnumber);
@@ -149,7 +151,7 @@ if ( $query->param('reserve_id') && $op eq 'cud-affect_reserve' ) {
 
         # diffBranchSend tells ModReserveAffect whether document is expected in this library or not,
         # i.e., whether to apply waiting status
-        ModReserveAffect( $itemnumber, $borrowernumber, $diffBranchSend, $reserve_id, $desk_id );
+        ModReserveAffect( $itemnumber, $borrowernumber, $diffBranchSend, $reserve_id, $desk_id, undef, $hold_pickup_shelf_id );
 
         if ($diffBranchSend) {
             my $tobranch = $hold->pickup_library();
@@ -596,12 +598,14 @@ if ( $messages->{'ResFound'} ) {
     my $holdmsgpreferences = C4::Members::Messaging::GetMessagingPreferences(
         { borrowernumber => $reserve->{'borrowernumber'}, message_name => 'Hold_Filled' } );
     my $branchCheck = ( $userenv_branch eq $reserve->{branchcode} );
+    my $holdPickupShelfLibraryCheck = Koha::HoldPickupShelves->search({library_id => $reserve->{branchcode}})->next;
     if ( $reserve->{'ResFound'} eq "Waiting" ) {
-        $template->param(
-            waiting => $branchCheck ? 1 : undef,
+                $template->param(
+            waiting      => $branchCheck ? 1 : undef,
+            hold_pickup_shelf_id => $reserve->{'hold_pickup_shelf_id'},
         );
-    } elsif ( C4::Context->preference('HoldsAutoFill') ) {
-        my $item   = Koha::Items->find($itemnumber);
+    } elsif ( C4::Context->preference('HoldsAutoFill') && !$holdPickupShelfLibraryCheck ) {
+        my $item = Koha::Items->find( $itemnumber );
         my $biblio = $item->biblio;
 
         my $diffBranchSend = !$branchCheck ? $reserve->{branchcode} : undef;
@@ -647,6 +651,7 @@ if ( $messages->{'ResFound'} ) {
         reservenotes   => $reserve->{'reservenotes'},
         reserve_id     => $reserve->{reserve_id},
         bormessagepref => $holdmsgpreferences->{'transports'},
+        hold_pickup_library => $holdPickupShelfLibraryCheck ? 1 : undef,
         C4::Context->preference('DisplayAddHoldGroups')
             && $reserve->{hold_group_id} ? ( hold_group_id => $reserve->{hold_group_id} ) : (),
     );
@@ -800,6 +805,11 @@ for my $checkin (@checkins) {
         }
         $checkin->{return_overdue} = $return_overdue;
         $checkin->{patron}         = $patron;
+    }
+
+    my $hold = Koha::Holds->search({ itemnumber => $item->itemnumber })->next;
+    if ( $hold ) {
+        $checkin->{hold_pickup_shelf_name} = $hold->hold_pickup_shelf ? $hold->hold_pickup_shelf->shelf_name : '';
     }
 
     $checkin->{item} = $item;

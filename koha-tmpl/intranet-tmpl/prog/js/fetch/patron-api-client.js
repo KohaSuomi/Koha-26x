@@ -1,7 +1,13 @@
 export class PatronAPIClient {
     constructor(HttpClient) {
         this.httpClient = new HttpClient({
-            baseURL: "/api/v1/",
+            baseURL: "/api/v1/patrons/",
+        });
+        this.categoriesHttpClient = new HttpClient({
+            baseURL: "/api/v1/patron_categories/",
+        });
+        this.categoriesHttpClient = new HttpClient({
+            baseURL: "/api/v1/patron_categories/",
         });
     }
 
@@ -9,36 +15,31 @@ export class PatronAPIClient {
         return {
             get: id =>
                 this.httpClient.get({
-                    endpoint: "patrons/" + id,
+                    endpoint: id,
                 }),
         };
     }
-
-    get categories() {
+    
+    get patron_categories() {
         return {
-            getAll: (query, params, headers) =>
-                this.httpClient.getAll({
-                    endpoint: "patron_categories",
+            getAll: (query, params) =>
+                this.categoriesHttpClient.getAll({
+                    endpoint: "",
                     query,
                     params,
-                    headers,
+                    headers: {},
                 }),
         };
     }
-
-    get self_renewal() {
+    
+    get patron_categories() {
         return {
-            start: (id, query, params, headers) =>
-                this.httpClient.getAll({
-                    endpoint: `public/patrons/${id}/self_renewal`,
+            getAll: (query, params) =>
+                this.categoriesHttpClient.getAll({
+                    endpoint: "",
                     query,
                     params,
-                    headers,
-                }),
-            submit: (id, renewal) =>
-                this.httpClient.post({
-                    endpoint: `public/patrons/${id}/self_renewal`,
-                    body: renewal,
+                    headers: {},
                 }),
         };
     }

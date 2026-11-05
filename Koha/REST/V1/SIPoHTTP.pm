@@ -89,6 +89,18 @@ sub process {
     }
 
     my $body = $c->req->body || $c->param('query') || '';
+    my $content_type = $c->req->headers->content_type || '';
+
+    if ($content_type =~ m!application/json!i) {
+        # TODO: implement JSON request parsing in buildJSON() below
+        $log->warn('SIPoHTTP JSON requests are not implemented yet.');
+        return $c->render(status => 501, text => 'Not implemented');
+    }
+
+    if ($content_type && $content_type !~ m!application/xml!i) {
+        $log->warn("Unsupported Content-Type for SIPoHTTP request: $content_type");
+        return $c->render(status => 415, text => 'Unsupported Media Type');
+    }
 
     $log->debug("Received request XML: " . $body);
 
@@ -347,6 +359,15 @@ sub buildLogin {
     $log->debug("sip message with checksum: $fullpkt");
 
     return $fullpkt;
+}
+
+sub buildJSON {
+    my ($request_body) = @_;
+
+    # TODO: parse application/json SIPoHTTP payloads here and convert them to the
+    # SIP2 request structure used by extractSip() / tradeSip().
+    # This should validate required fields and return the SIP message payload.
+    return $request_body;
 }
 
 sub buildXml {

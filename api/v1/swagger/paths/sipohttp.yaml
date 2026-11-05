@@ -114,6 +114,22 @@
               enum:
                 - "SIPoHTTP endpoint is not enabled"
                 - "SIP account not found"
+      415:
+        description: Unsupported media type; only application/xml is accepted
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Unsupported Media Type"
+      501:
+        description: JSON payloads are not implemented for this endpoint yet
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Not implemented"
       502:
         description: Bad gateway (SIP server communication error)
         schema:

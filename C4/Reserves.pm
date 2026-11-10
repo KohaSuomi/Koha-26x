@@ -841,6 +841,20 @@ sub CheckReserves {
     # Find this item in the reserves
     my @reserves = _Findgroupreserve( $item->biblionumber, $item->itemnumber, $lookahead_days, $ignore_borrowers );
 
+    # Allow plugins to influence hold selection (KohaSuomi #1563).
+    # A plugin may return a reserve hashref; if it passes core eligibility
+    # checks below it is preferred over the default ordering.
+    my $plugin_preferred_reserve_id;
+    if (@reserves) {
+        my ($plugin_response) = Koha::Plugins->call(
+            'prioritize_hold_for_item',
+            { item => $item, reserves => \@reserves }
+        );
+        if ( ref $plugin_response eq 'HASH' && defined $plugin_response->{reserve_id} ) {
+            $plugin_preferred_reserve_id = $plugin_response->{reserve_id};
+        }
+    }
+
     # $priority and $highest are used to find the most important item
     # in the list returned by &_Findgroupreserve. (The lower $priority,
     # the more important the item.)
@@ -854,6 +868,10 @@ sub CheckReserves {
         my $priority                        = 10000000;
 
         foreach my $res (@reserves) {
+            my $is_preferred = defined $plugin_preferred_reserve_id
+                && defined $res->{reserve_id}
+                && $res->{reserve_id} == $plugin_preferred_reserve_id;
+
             if ( $res->{'found'} && $res->{'found'} eq 'W' ) {
                 return ( "Waiting", $res, \@reserves );    # Found it, it is waiting
             } elsif ( $res->{'found'} && $res->{'found'} eq 'P' ) {
@@ -898,7 +916,8 @@ sub CheckReserves {
                 # See if this item is more important than what we've got so far
                 if (   ( $res->{'priority'} && $res->{'priority'} < $priority )
                     || $local_hold_match
-                    || $local_hold_group_match )
+                    || $local_hold_group_match
+                    || $is_preferred )
                 {
                     next
                         if $res->{item_group_id}
@@ -930,6 +949,7 @@ sub CheckReserves {
                     $highest  = $res;
                     last
                         if $local_hold_match
+                        || $is_preferred
                         || ( ( $LocalHoldsPriority eq 'GiveLibraryGroup' ) && $local_hold_group_match );
                     next if $local_hold_group_match;
                 }

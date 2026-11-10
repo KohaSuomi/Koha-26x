@@ -44,6 +44,7 @@ use Koha::Items;
 use Koha::Libraries;
 use Koha::Logger;
 use Koha::Patrons;
+use Koha::Plugins;
 
 use List::Util         qw( shuffle );
 use List::MoreUtils    qw( any );
@@ -741,6 +742,16 @@ sub MapItemsToHoldRequests {
     # handle trivial cases
     return unless scalar(@$hold_requests) > 0;
     return unless scalar(@$available_items) > 0;
+
+    # Allow plugins to influence queue allocation (KohaSuomi #1563).
+    {
+        my ($ordered) = Koha::Plugins->call(
+            'prioritize_holds_queue',
+            { holds => $hold_requests, items => $available_items }
+        );
+        $hold_requests = $ordered if ref $ordered eq 'ARRAY';
+        return unless ref $hold_requests eq 'ARRAY' && scalar(@$hold_requests) > 0;
+    }
 
     map { $_->{_object} = Koha::Items->find( $_->{itemnumber} ) } @$available_items;
     my $libraries = {};

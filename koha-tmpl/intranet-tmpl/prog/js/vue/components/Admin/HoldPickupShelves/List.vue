@@ -9,11 +9,21 @@
             />
         </Toolbar>
         <h1>{{ title }}</h1>
-        <div v-if="hold_pickup_shelves_any > 0" class="page-section">
+        <div v-if="hold_pickup_shelves_count > 0" class="page-section">
+            <div class="mb-3">
+                <label for="libraryFilter" class="pe-1">{{ $__("Filter by library") }}:</label>
+                <select id="libraryFilter" v-model="library_id" @change="fetchHoldPickupShelves($event)">
+                    <option :value="null">{{ $__("All libraries") }}</option>
+                    <option v-for="library in libraries" :key="library.library_id" :value="library.library_id">
+                        {{ library.name }}
+                    </option>
+                </select>
+            </div>
             <KohaTable
                 ref="table"
                 v-bind="tableOptions"
                 @edit="doEdit"
+                @editTab="doEditTab"
                 @delete="doDelete"
             ></KohaTable>
         </div>
@@ -56,7 +66,11 @@ export default {
                                 <div style="display:flex;align-items:center;gap:2px;">
                                     <button type="button" class="priority-arrow-last" data-id="${row.hold_pickup_shelf_id}" data-priority="${data}" title="${this.$__('Set last priority')}" style="border:none;background:none;padding:0 2px;font-size:16px;">&#8659;</button>
                                     <button type="button" class="priority-arrow-down" data-id="${row.hold_pickup_shelf_id}" data-priority="${data}" title="${this.$__('Decrease priority')}" style="border:none;background:none;padding:0 2px;font-size:16px;">&#8595;</button>
-                                    <span style="min-width:30px;display:inline-block;text-align:center;">${data !== null ? data : ''}</span>
+                                    <select class="priority-select" data-id="${row.hold_pickup_shelf_id}" style="min-width:50px;padding:2px;">
+                                        ${Array.from({length: this.hold_pickup_shelves_count}, (_, i) => i + 1).map(p => 
+                                            `<option value="${p}" ${p === data ? 'selected' : ''}>${p}</option>`
+                                        ).join('')}
+                                    </select>
                                     <button type="button" class="priority-arrow-up" data-id="${row.hold_pickup_shelf_id}" data-priority="${data}" title="${this.$__('Increase priority')}" style="border:none;background:none;padding:0 2px;font-size:16px;">&#8593;</button>
                                     <button type="button" class="priority-arrow-first" data-id="${row.hold_pickup_shelf_id}" data-priority="${data}" title="${this.$__('Set first priority')}" style="border:none;background:none;padding:0 2px;font-size:16px;">&#8657;</button>
                                 </div>
@@ -143,6 +157,12 @@ export default {
                     "-1": [
                         "edit",
                         {
+                            editTab: {
+                                text: this.$__("Edit in new tab"),
+                                icon: "fa fa-external-link-alt",
+                            },
+                        },
+                        {
                             delete: {
                                 text: this.$__("Delete"),
                                 icon: "fa fa-trash",
@@ -150,28 +170,35 @@ export default {
                         },
                     ],
                 },
-                url: "/api/v1/holds/pickup_shelves",
+                url: this.url,
                 options: {embed: "library,patron_category,holds_count", 
                           order: [[1, "asc"]]},
             },
             initialized: false,
-            hold_pickup_shelves_any: 0,
+            hold_pickup_shelves_count: 0,
         };
     },
     setup() {
         const { setWarning, setMessage, setError, setConfirmationDialog } =
             inject("mainStore");
+        const url = "/api/v1/holds/pickup_shelves";
         return {
             setWarning,
             setMessage,
             setError,
             setConfirmationDialog,
+            url,
         };
     },
-    beforeRouteEnter(to, from, next) {
-        next(vm => {
-            vm.anyHoldPickupShelves().then(() => (vm.initialized = true));
-        });
+    beforeCreate() {
+        const client = APIClient.hold_pickup_shelves;
+        client.hold_pickup_shelves.count().then(
+            count => {
+                this.hold_pickup_shelves_count = count;
+                this.initialized = true;
+            },
+            error => {}
+        );
     },
     watch: {
         initialized(newVal) {
@@ -182,68 +209,20 @@ export default {
                         table.addEventListener("click", (event) => {
                             if (event.target && event.target.classList.contains("priority-arrow-down")) {
                                 const priority = parseInt(event.target.getAttribute("data-priority"));
-                                this.changePriority(event, priority + 1);
+                                this.batchUpdatePriorities({new_priority: priority + 1, hold_pickup_shelf_id: event.target.getAttribute("data-id")});
                             } else if (event.target && event.target.classList.contains("priority-arrow-up")) {
                                 const priority = parseInt(event.target.getAttribute("data-priority"));
-                                this.changePriority(event, priority - 1);
+                                this.batchUpdatePriorities({new_priority: priority - 1, hold_pickup_shelf_id: event.target.getAttribute("data-id")});
                             } else if (event.target && event.target.classList.contains("priority-arrow-last")) {
-                                // Move the selected row to the last priority, shift others up
-                                const table = event.target.closest("table");
-                                if (table) {
-                                    const rows = Array.from(table.querySelectorAll("tbody tr"));
-                                    // Collect all shelf ids and priorities
-                                    let priorities = rows.map(row => {
-                                        const btn = row.querySelector('button[data-priority]');
-                                        return {
-                                            id: btn ? btn.getAttribute("data-id") : null,
-                                            priority: btn ? parseInt(btn.getAttribute("data-priority")) : null,
-                                            row: row
-                                        };
-                                    }).filter(p => p.id && !isNaN(p.priority));
-                                    // Sort by priority ascending
-                                    priorities.sort((a, b) => a.priority - b.priority);
-                                    if (priorities.length < 2) return;
-                                    // Find the selected id
-                                    const selectedId = event.target.getAttribute("data-id");
-                                    // Remove selected from array
-                                    const selected = priorities.find(p => p.id === selectedId);
-                                    priorities = priorities.filter(p => p.id !== selectedId);
-                                    // Push selected to end if found
-                                    if (selected) {
-                                        priorities.push(selected);
-                                        // Assign new priorities (1-based)
-                                        this.batchUpdatePriorities(priorities.map((p, idx) => ({
-                                            hold_pickup_shelf_id: p.id,
-                                            priority: idx + 1
-                                        })));
-                                    }
-                                }
+                                this.batchUpdatePriorities({last_priority: true, hold_pickup_shelf_id: event.target.getAttribute("data-id")});
                             } else if (event.target && event.target.classList.contains("priority-arrow-first")) {
-                                // Reorder all priorities: last becomes first, others shift down
-                                const table = event.target.closest("table");
-                                if (table) {
-                                    const rows = Array.from(table.querySelectorAll("tbody tr"));
-                                    // Collect all shelf ids and priorities
-                                    const priorities = rows.map(row => {
-                                        const btn = row.querySelector('button[data-priority]');
-                                        return {
-                                            id: btn ? btn.getAttribute("data-id") : null,
-                                            priority: btn ? parseInt(btn.getAttribute("data-priority")) : null,
-                                            row: row
-                                        };
-                                    }).filter(p => p.id && !isNaN(p.priority));
-                                    // Sort by priority ascending
-                                    priorities.sort((a, b) => a.priority - b.priority);
-                                    if (priorities.length < 2) return;
-                                    // Move last to first, shift others down
-                                    const last = priorities.pop();
-                                    priorities.unshift(last);
-                                    // Assign new priorities (1-based)
-                                    this.batchUpdatePriorities(priorities.map((p, idx) => ({
-                                        hold_pickup_shelf_id: p.id,
-                                        priority: idx + 1
-                                    })));
-                                }
+                                this.batchUpdatePriorities({first_priority: true, hold_pickup_shelf_id: event.target.getAttribute("data-id")});
+                            }
+                        });
+                        table.addEventListener("change", (event) => {
+                            if (event.target && event.target.classList.contains("priority-select")) {
+                                const new_priority = parseInt(event.target.value);
+                                this.batchUpdatePriorities({new_priority: new_priority, hold_pickup_shelf_id: event.target.getAttribute("data-id")});
                             }
                         });
                     }
@@ -252,14 +231,11 @@ export default {
         }
     },
     methods: {
-        async anyHoldPickupShelves() {
-            const client = APIClient.hold_pickup_shelves;
-            await client.hold_pickup_shelves.getAll({}, {_page: 1, _per_page: 1}).then(
-                hold_pickup_shelves => {
-                    this.hold_pickup_shelves_any = hold_pickup_shelves.length;
-                },
-                error => {}
-            );
+        fetchHoldPickupShelves(event) {
+            this.url = this.library_id
+                ? `/api/v1/holds/pickup_shelves?library_id=${this.library_id}`
+                : "/api/v1/holds/pickup_shelves";
+            this.$refs.table.redraw(this.url);
         },
         newHoldPickupShelf() {
             this.$router.push({ name: "HoldPickupShelvesFormAdd" });
@@ -269,6 +245,13 @@ export default {
                 name: "HoldPickupShelvesFormAddEdit",
                 params: { hold_pickup_shelf_id },
             });
+        },
+        doEditTab: function ({ hold_pickup_shelf_id }, dt, event) {
+            const url = this.$router.resolve({
+                name: "HoldPickupShelvesFormAddEdit",
+                params: { hold_pickup_shelf_id },
+            }).href;
+            window.open(url, '_blank');
         },
         doDelete: function (hold_pickup_shelf, dt, event) {
             this.setConfirmationDialog(
@@ -315,12 +298,12 @@ export default {
                 }
             );
         },
-        batchUpdatePriorities: function (priorities) {
+        batchUpdatePriorities: function (data) {
             const client = APIClient.hold_pickup_shelves;
-            client.batch_update_priority.update(priorities).then(
+            client.batch_update_priority.update(data).then(
                 success => {
                     this.setMessage(this.$__("Priorities updated successfully"));
-                    this.$refs.table.redraw("/api/v1/holds/pickup_shelves");
+                    this.fetchHoldPickupShelves();
                 },
                 error => {
                     this.setError(this.$__("Failed to update priorities"));

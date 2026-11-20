@@ -40,6 +40,10 @@
         <span>Shelving location</span>
     [%- CASE 'All locations' %]
         <span>All locations</span>
+    [%- CASE 'sublocation' %]
+        <span>Sublocation</span>
+    [%- CASE 'All sublocations' %]
+        <span>All sublocations</span>
     [%- CASE 'itype' %]
         <span>Item type</span>
     [%- CASE 'All item types' %]
@@ -203,6 +207,12 @@
     [% loc.label = loc.lib %]
 [% END %]
 
+[% sublocations = AuthorisedValues.GetDescriptionsByKohaField({ kohafield = 'items.sublocation' }) %]
+[% FOREACH subloc IN sublocations %]
+    [% subloc.value = subloc.authorised_value %]
+    [% subloc.label = subloc.lib %]
+[% END %]
+
 [%# Page starts here %]
 
 [% SET footerjs = 1 %]
@@ -255,6 +265,9 @@
                 [% INCLUDE form_field_select name="holdingbranch" options = branches %]
                 [% IF locations.size %]
                     [% INCLUDE form_field_select name="location" options = locations %]
+                [% END %]
+                [% IF sublocations.size %]
+                    [% INCLUDE form_field_select name="sublocation" options = sublocations %]
                 [% END %]
             </fieldset>
             <fieldset id="access_and_condition">
@@ -428,6 +441,11 @@
             av._str = av.lib;
             return av;
         } );
+        const all_sublocations = [% To.json(AuthorisedValues.GetDescriptionsByKohaField({ kohafield => 'items.sublocation' })) | $raw %].map( av => {
+            av._id = av.authorised_value;
+            av._str = av.lib;
+            return av;
+        } );
         const all_notforloans = [% To.json(AuthorisedValues.GetDescriptionsByKohaField({ kohafield => 'items.notforloan' })) | $raw %].map( av => {
             av._id = av.authorised_value;
             av._str = av.lib;
@@ -595,6 +613,9 @@
                 '      <th id="items_location" data-colname="shelving_location">' +
                 _("Shelving location") +
                 "</th>" +
+                '      <th id="items_sublocation" data-colname="sublocation">' +
+                _("Sublocation") +
+                "</th>" +
                 '      <th id="items_itype" data-colname="item_type">' +
                 _("Itemtype") +
                 "</th>" +
@@ -740,6 +761,7 @@
                 collection_codes: all_ccodes,
                 libraries: all_libraries,
                 locations: all_locations,
+                sublocations: all_sublocations,
                 item_types: all_item_types,
                 av_notforloan: all_notforloans,
                 av_lost: all_losts,
@@ -784,6 +806,7 @@
                         { name: "homebranch", dataFilter: "libraries" },
                         { name: "holdingbranch", dataFilter: "libraries" },
                         { name: "location", dataFilter: "locations" },
+                        { name: "sublocation", dataFilter: "sublocations" },
                         { name: "itype", dataFilter: "item_types" },
                         { name: "stocknumber" },
                         { name: "notforloan", dataFilter: "av_notforloan" },

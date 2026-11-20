@@ -69,7 +69,7 @@ if ( defined $format and $format eq 'json' ) {
                 push @c, 'and';
 
                 if ( grep { $_ eq $column_name }
-                    qw( ccode homebranch holdingbranch location itype notforloan itemlost onloan ) )
+                    qw( ccode homebranch holdingbranch location sublocation itype notforloan itemlost onloan ) )
                 {
                     push @q,  "$word";
                     push @op, '=';
@@ -147,7 +147,7 @@ if ( defined $format and $format ne 'shareable' ) {
     };
 
     foreach my $p (
-        qw(homebranch holdingbranch location itype ccode issues datelastborrowed notforloan itemlost withdrawn damaged))
+        qw(homebranch holdingbranch location sublocation itype ccode issues datelastborrowed notforloan itemlost withdrawn damaged))
     {
 
         my @q;

@@ -782,6 +782,8 @@ modules:
             -
               columnname: shelving_location
             -
+              columnname: sublocation
+            -
               columnname: item_type
             -
               columnname: inventory_number

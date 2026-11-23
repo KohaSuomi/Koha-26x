@@ -14,7 +14,7 @@ jobs:
         env:
           BRANCH: ${{ github.ref_name }}
         run: |
-          if [[ "$BRANCH" =~ ^(ksdev/ks-[0-9]+-.+|build_.+|ks26|development|master|main)$ ]]; then
+          if [[ "$BRANCH" =~ ^(ksdev/ks-[0-9]+-(on-[0-9]+-)?([Bb]ug-[0-9]+|[Kk][Ss]?[0-9]+-[0-9]+|[Kk][Oo][Hh][Aa]-[0-9]+|[Kk]oha[Ss]uomi-global)(-.*)?|build_.+|ks26|development|master|main)$ ]]; then
             echo "Branch name OK: $BRANCH"
           else
             echo "::error::Branch '$BRANCH' does not follow the naming convention."

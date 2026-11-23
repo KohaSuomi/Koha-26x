@@ -1,0 +1,24 @@
+name: Branch naming convention check
+
+on:
+  create:
+    branches:
+      - '**'
+
+jobs:
+  check-branch-name:
+    if: github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch name
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [[ "$BRANCH" =~ ^(ksdev/ks-[0-9]+-.+|build_.+|ks26|development|master|main)$ ]]; then
+            echo "Branch name OK: $BRANCH"
+          else
+            echo "::error::Branch '$BRANCH' does not follow the naming convention."
+            echo "See: https://github.com/KohaSuomi/Koha/wiki/Kehittäjien-ohjeet#koha-suomen-kehityshaarojen-luominen-ja-nimeäminen"
+            echo "Pushed by: ${{ github.actor }}"
+            exit 1
+          fi
